@@ -8,10 +8,11 @@ import org.apache.logging.log4j.*
 import groovy.cli.commons.CliBuilder
 
 /**
- * Class to                     
+ * Astrolabe FITS file metadata extractor tool.
+ *   This class parses and validates arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Initial skeleton creation.
+ *   Last Modified: Activate filename filtering skeleton.
  */
 class Extractor implements FilenameFilter {
 
@@ -168,7 +169,14 @@ class Extractor implements FilenameFilter {
   def processFiles (worker, directory) {
     log.trace("(Extractor.processFiles): worker=${worker}, dir=${directory}")
     int cnt = 0
-    // TODO: IMPLEMENT LATER
+    def fileList = directory.list(this) as List
+    fileList.each { filename ->
+      def fyl = goodFile(directory, filename)
+      if (!fyl)
+        return                      // exit out now if not a valid file
+      // else TODO: IMPLEMENT LATER
+      println("FILE: ${fyl.getName()}")     // REMOVE LATER
+    }
     return cnt
   }
 
