@@ -16,7 +16,6 @@ dependencies {
     implementation 'org.codehaus.groovy:groovy:2.5.7'
     // implementation 'org.codehaus.groovy:groovy-json:2.5.7'
     implementation 'org.codehaus.groovy:groovy-cli-commons:2.5.7'
-    // implementation 'commons-cli:commons-cli:1.4'
     implementation 'org.apache.logging.log4j:log4j-core:2.12.0'
     implementation 'org.apache.logging.log4j:log4j-api:2.12.0'
     implementation 'gov.nasa.gsfc.heasarc:nom-tam-fits:1.15.2'
@@ -30,7 +29,7 @@ dependencies {
 
 mainClassName = 'edu.arizona.astrolabe.extractor.Extractor'
 sourceCompatibility = 1.8
-version = '0.0.1'
+version = '0.0.2'
 
 shadowJar {
   manifest {
