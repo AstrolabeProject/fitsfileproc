@@ -1,0 +1,15 @@
+right_ascension, s_ra
+declination, s_dec
+DATE-BEG, t_min
+DATE-END, t_max
+DATE-OBS, t_min
+INSTRUME, instrument_name
+MJD-END , t_max
+MJD-OBS , t_min
+NAXIS1  , sxel1
+NAXIS2  , sxel2
+OBJECT  , target_name
+OBSERVER, obs_creator_name
+TELESCOP, facility_name
+TSTART  , t_min
+TSTOP   , t_max

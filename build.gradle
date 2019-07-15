@@ -1,0 +1,46 @@
+plugins {
+  id 'groovy'
+  id 'application'
+  id 'com.github.johnrengelman.shadow' version '5.1.0'
+}
+
+apply plugin: 'groovy'
+apply plugin: 'application'
+apply plugin: 'com.github.johnrengelman.shadow'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.codehaus.groovy:groovy:2.5.7'
+    // implementation 'org.codehaus.groovy:groovy-json:2.5.7'
+    implementation 'org.codehaus.groovy:groovy-cli-commons:2.5.7'
+    // implementation 'commons-cli:commons-cli:1.4'
+    implementation 'org.apache.logging.log4j:log4j-core:2.12.0'
+    implementation 'org.apache.logging.log4j:log4j-api:2.12.0'
+    implementation 'gov.nasa.gsfc.heasarc:nom-tam-fits:1.15.2'
+    testCompile 'junit:junit'
+}
+
+/** Customize Groovy compilation. */
+// tasks.withType(GroovyCompile) {
+//   groovyOptions.configurationScript = file("src/conf/config.groovy")
+// }
+
+mainClassName = 'edu.arizona.astrolabe.extractor.Extractor'
+sourceCompatibility = 1.8
+version = '0.0.1'
+
+shadowJar {
+  manifest {
+    archiveName = "extractor-${version}.jar"
+    mergeServiceFiles()
+    attributes('Project-Version': version,
+               'Built-By': System.getProperty('user.name'),
+               'Build-Date': new Date(),
+               'Build-Gradle': gradle.gradleVersion,
+               'Build-JDK': System.getProperty('java.version'),
+               'Main-Class': mainClassName)
+  }
+}
