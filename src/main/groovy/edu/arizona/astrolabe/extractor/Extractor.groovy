@@ -12,13 +12,13 @@ import groovy.cli.commons.CliBuilder
  *   This class parses and validates arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Activate filename filtering skeleton.
+ *   Last Modified: Rename default mappings file.
  */
 class Extractor implements FilenameFilter {
 
   static final Logger log = LogManager.getLogger(Extractor.class.getName());
 
-  static final String DEFAULT_MAP_FILEPATH = "/default-mappings.txt"
+  static final String DEFAULT_MAP_FILEPATH = "/jwst-mappings.txt"
 
   public boolean DEBUG   = false
   public boolean VERBOSE = false
@@ -82,9 +82,9 @@ class Extractor implements FilenameFilter {
                      'VERBOSE':  xtor.VERBOSE ]
     def worker = new Worker(settings)
 
-    // transform and load the result files in the directory
+    // transform and load the FITS files in the directory
     if (xtor.VERBOSE) {
-      log.info("(Extractor.main): Processing result files from ${inDir}...")
+      log.info("(Extractor.main): Processing FITS files from ${inDir}...")
     }
 
     def procCount = xtor.processDirs(worker, inDir)
