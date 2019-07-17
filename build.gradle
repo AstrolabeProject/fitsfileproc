@@ -12,10 +12,12 @@ repositories {
     mavenCentral()
 }
 
+def groovyVersion = "2.5.7"
+
 dependencies {
-    implementation 'org.codehaus.groovy:groovy:2.5.7'
-    // implementation 'org.codehaus.groovy:groovy-json:2.5.7'
-    implementation 'org.codehaus.groovy:groovy-cli-commons:2.5.7'
+    implementation "org.codehaus.groovy:groovy:${groovyVersion}"
+    // implementation "org.codehaus.groovy:groovy-json:${groovyVersion}"
+    implementation "org.codehaus.groovy:groovy-cli-commons:${groovyVersion}"
     implementation 'org.apache.logging.log4j:log4j-core:2.12.0'
     implementation 'org.apache.logging.log4j:log4j-api:2.12.0'
     implementation 'gov.nasa.gsfc.heasarc:nom-tam-fits:1.15.2'
@@ -27,18 +29,19 @@ dependencies {
 //   groovyOptions.configurationScript = file("src/conf/config.groovy")
 // }
 
+version = '0.0.2'
 mainClassName = 'edu.arizona.astrolabe.extractor.Extractor'
 sourceCompatibility = 1.8
-version = '0.0.2'
 
 shadowJar {
   manifest {
-    archiveName = "extractor-${version}.jar"
+    archiveName = "${rootProject.name}-${version}.jar"
     mergeServiceFiles()
     attributes('Project-Version': version,
                'Built-By': System.getProperty('user.name'),
                'Build-Date': new Date(),
                'Build-Gradle': gradle.gradleVersion,
+               'Build-Groovy': groovyVersion,
                'Build-JDK': System.getProperty('java.version'),
                'Main-Class': mainClassName)
   }
