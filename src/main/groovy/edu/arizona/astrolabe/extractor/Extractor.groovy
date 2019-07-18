@@ -12,7 +12,7 @@ import groovy.cli.commons.CliBuilder
  *   This class parses and validates arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Rename default mappings file.
+ *   Last Modified: Take multiple FITS files and directories as arguments.
  */
 class Extractor implements FilenameFilter {
 
@@ -27,7 +27,7 @@ class Extractor implements FilenameFilter {
   /** Main program entry point. */
   public static void main (String[] args) {
     // read, parse, and validate command line arguments
-    def usage = 'extractor [-h] [-m mapfilepath] directory'
+    def usage = 'extractor [-h] [-m mapfilepath] (FITS-file|FITS-directory)..'
     def cli = new CliBuilder(usage: usage)
     cli.width = 100                         // increase usage message width
     cli.with {
@@ -50,19 +50,12 @@ class Extractor implements FilenameFilter {
     // instantiate this class with raw options
     def xtor = new Extractor(options)
 
-    // validate the input directory path
-    File inDir = xtor.goodDirPath(options.arguments()[0])
-    if (!inDir) {
-      System.err.println("Unable to open input directory ${inDir} for reading...exiting")
-      System.exit(2)                        // problem with input directory: exit out now
-    }
-
     // find and open the specified mappings file or use the default one
     def mapfile = options.m
     if (mapfile) {
-      File mappings = xtor.goodFile(mapfile)
+      File mappings = xtor.goodFilePath(mapfile)
       if (!mappings) {
-        System.err.println("Unable to open mappings file '${mapfile}' ...exiting")
+        System.err.println("Unable to open mappings file '${mapfile}'. Exiting...")
         System.exit(3)
       }
     }
@@ -70,11 +63,11 @@ class Extractor implements FilenameFilter {
       mapfile = DEFAULT_MAP_FILEPATH
 
     if (xtor.VERBOSE)
-      log.info("(Extractor.main): Reading mapping file: ${mapfile}...")
+      log.info("(Extractor.main): Reading mapping file: ${mapfile}")
     def mCnt = xtor.loadMappings(mapfile)
     xtor.MAPPINGS.each { entry -> println("${entry.key}=${entry.value}") } // REMOVE LATER
     if (xtor.VERBOSE)
-      log.info("(Extractor.main): Read ${mCnt} filename mappings.")
+      log.info("(Extractor.main): Read ${mCnt} field mappings.")
 
     // create worker with the specified settings
     def settings = [ 'DEBUG':    xtor.DEBUG,
@@ -82,15 +75,33 @@ class Extractor implements FilenameFilter {
                      'VERBOSE':  xtor.VERBOSE ]
     def worker = new Worker(settings)
 
-    // transform and load the FITS files in the directory
-    if (xtor.VERBOSE) {
-      log.info("(Extractor.main): Processing FITS files from ${inDir}...")
+    // check the given input paths for validity
+    List pathList = xtor.validatePathStrings(options.arguments())
+
+    // process the given FITS files and directories
+    def procCount = 0
+    pathList.each { path ->
+      if (! path instanceof java.io.File) {
+        System.err.println(
+          "Found validated path '${path}' which is neither a file nor a directory. Exiting...")
+        System.exit(4)
+      }
+      if (path.isDirectory()) {
+        if (xtor.VERBOSE)
+          log.info("(Extractor.main): Processing FITS files in '${path}'")
+        procCount += xtor.processDirs(worker, path)
+      }
+      else if (path.isFile()) {
+        if (xtor.VERBOSE)
+          log.info("(Extractor.main): Processing FITS file '${path}'")
+        procCount += xtor.processAFile(worker, path)
+      }
+      else {  /** should not happen so ignore the invalid path */ }
     }
 
-    def procCount = xtor.processDirs(worker, inDir)
     // worker.exit()                           // cleanup worker
     if (xtor.VERBOSE)
-      log.info("(Extractor.main): Processed ${procCount} results.")
+      log.info("(Extractor.main): Processed ${procCount} FITS files.")
   }
 
 
@@ -104,39 +115,58 @@ class Extractor implements FilenameFilter {
 
   /** This class implements java.io.FilenameFilter with this method. */
   boolean accept (java.io.File dir, java.lang.String filename) {
-    // return FILE_TYPES.any { filename.endsWith(it) } // more selective file types
+    log.trace("(Extractor.accept): dir=${dir}, filename=${filename}")
+    return isAcceptableFilename(filename)   // ** dir argument ignored **
+  }
+
+  /** Tell whether the given filename is to be processed or not. */
+  boolean isAcceptableFilename (String filename) {
+    log.trace("(Extractor.isAcceptableFilename): filename=$filename")
+    // return FILE_TYPES.any { filename.endsWith(it) } // for a set of file types
     return filename.endsWith('.fits')
   }
 
   /** Return the basename of the given filename string. */
   def fileBasename (filename) {
+    log.trace("(Extractor.fileBasename): filename=$filename")
     return filename.substring(0,filename.indexOf('.'))
   }
 
   /** Return true if the given file is a directory, readable and, optionally, writeable. */
   def goodDirectory (File dir, writeable=false) {
+    log.trace("(Extractor.goodDirectory): dir=$dir")
     return (dir && dir.isDirectory() && dir.canRead() && (!writeable || dir.canWrite()))
   }
 
   /** If first argument is a path string to a readable directory return it else return null. */
   File goodDirPath (dirPath, writeable=false) {
+    log.trace("(Extractor.goodDirPath): dirPath=$dirPath")
     if (dirPath.isEmpty())                  // sanity check
       return null
     def dir = new File(dirPath)
     return (goodDirectory(dir) ? dir : null)
   }
 
-  /** If given filename string references a readable file in the given directory,
-      return the file else return null. */
+  /** If given filename string references a readable file return the file else return null. */
   File goodFile (File directory, String filename) {
+    log.trace("(Extractor.goodFile): directory=${directory}, filename=${filename}")
     def fyl = new File(directory, filename)
-    return (fyl && fyl.isFile() && fyl.canRead()) ? fyl : null
+    return (readableFile(fyl)) ? fyl : null
   }
 
   /** If given file path string references a readable file return the file else return null. */
-  File goodFile (String filepath) {
-    def fyl = new File(filepath)
-    return (fyl && fyl.isFile() && fyl.canRead()) ? fyl : null
+  File goodFilePath (filePath) {
+    log.trace("(Extractor.goodFilePath): filePath=$filePath")
+    if (filePath.isEmpty())                  // sanity check
+      return null
+    def fyl = new File(filePath)
+    return (readableFile(fyl) ? fyl : null)
+  }
+
+  /** Return true if the given file is a file and readable. */
+  def readableFile (File fyl) {
+    log.trace("(Extractor.readableFile): fyl=$fyl")
+    return (fyl && fyl.isFile() && fyl.canRead())
   }
 
   /** Load the mapping from disk and return a count of the mappings read. */
@@ -156,6 +186,7 @@ class Extractor implements FilenameFilter {
 
   /** Process the files in all subdirectories of the given top-level directory. */
   def processDirs (worker, topDirectory) {
+    log.trace("(Extractor.processDirs): worker=${worker}, topDirectory=${topDirectory}")
     int cnt = processFiles(worker, topDirectory)
     topDirectory.eachDirRecurse { dir ->
       if (goodDirectory(dir)) {
@@ -171,13 +202,33 @@ class Extractor implements FilenameFilter {
     int cnt = 0
     def fileList = directory.list(this) as List
     fileList.each { filename ->
-      def fyl = goodFile(directory, filename)
-      if (!fyl)
+      def aFile = goodFile(directory, filename)
+      if (!aFile)
         return                      // exit out now if not a valid file
-      // else TODO: IMPLEMENT LATER
-      println("FILE: ${fyl.getName()}")     // REMOVE LATER
+      else {
+        cnt += processAFile(worker, aFile)
+      }
     }
     return cnt
+  }
+
+  /** Process the single given file with the given worker. */
+  def processAFile (worker, aFile) {
+    log.trace("(Extractor.processAFile): worker=${worker}, aFile=${aFile}")
+    println("FILE: ${aFile.getName()}")     // REMOVE LATER
+    // TODO: IMPLEMENT LATER
+    return 1
+  }
+
+  /** Return a (possibly empty) list of valid file/directory paths. */
+  def validatePathStrings (pathStrings) {
+    log.trace("(Extractor.validatePathStrings): pathStrings=$pathStrings")
+    pathStrings.findResults { pathname ->
+      if (isAcceptableFilename(pathname))
+        goodFilePath(pathname)
+      else
+        goodDirPath(pathname)
+    }
   }
 
 }
