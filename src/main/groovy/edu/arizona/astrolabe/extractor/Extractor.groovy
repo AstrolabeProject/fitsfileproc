@@ -12,7 +12,7 @@ import groovy.cli.commons.CliBuilder
  *   This class parses and validates arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Take multiple FITS files and directories as arguments.
+ *   Last Modified: Handle external mappings file and default mappings resource.
  */
 class Extractor implements FilenameFilter {
 
@@ -22,7 +22,6 @@ class Extractor implements FilenameFilter {
 
   public boolean DEBUG   = false
   public boolean VERBOSE = false
-  public Map MAPPINGS = [:]
 
   /** Main program entry point. */
   public static void main (String[] args) {
@@ -50,28 +49,23 @@ class Extractor implements FilenameFilter {
     // instantiate this class with raw options
     def xtor = new Extractor(options)
 
-    // find and open the specified mappings file or use the default one
-    def mapfile = options.m
-    if (mapfile) {
-      File mappings = xtor.goodFilePath(mapfile)
-      if (!mappings) {
-        System.err.println("Unable to open mappings file '${mapfile}'. Exiting...")
+    // validate the specified mappings file, if given
+    File mapfile = null
+    if (options.m) {
+      mapfile = xtor.goodFilePath(options.m)
+      if (!mapfile) {
+        System.err.println(
+          "Unable to find and read specified mappings file '${options.m}'. Exiting...")
         System.exit(3)
       }
     }
-    else
-      mapfile = DEFAULT_MAP_FILEPATH
 
-    if (xtor.VERBOSE)
-      log.info("(Extractor.main): Reading mapping file: ${mapfile}")
-    def mCnt = xtor.loadMappings(mapfile)
-    xtor.MAPPINGS.each { entry -> println("${entry.key}=${entry.value}") } // REMOVE LATER
-    if (xtor.VERBOSE)
-      log.info("(Extractor.main): Read ${mCnt} field mappings.")
+    // load the FITS fieldname mappings data
+    def mappings = xtor.loadMappings(mapfile, options)
 
     // create worker with the specified settings
     def settings = [ 'DEBUG':    xtor.DEBUG,
-                     'MAPPINGS': xtor.MAPPINGS,
+                     'MAPPINGS': mappings,
                      'VERBOSE':  xtor.VERBOSE ]
     def worker = new Worker(settings)
 
@@ -169,20 +163,41 @@ class Extractor implements FilenameFilter {
     return (fyl && fyl.isFile() && fyl.canRead())
   }
 
-  /** Load the mapping from disk and return a count of the mappings read. */
-  def loadMappings (mapFilePath) {
-    def cnt = 0
-    def mapStream = this.getClass().getResourceAsStream(mapFilePath);
+
+  /** Locate the mappings file, load the mappings, and return them. */
+  def loadMappings (File mapfile, options) {
+    log.trace("(Extractor.loadMappings): mapfile=${mapfile}, options=${options}")
+    def mCnt = 0
+    def mappings = [:]
+    def mapStream
+    def mapName = DEFAULT_MAP_FILEPATH
+
+    if (mapfile) {                          // if given external map file, use it
+      mapStream = new FileInputStream(mapfile)
+      mapName = mapfile.getAbsolutePath()
+    }
+    else                                    // else fallback to default resource
+      mapStream = this.getClass().getResourceAsStream(DEFAULT_MAP_FILEPATH);
+
+    if (VERBOSE)
+      log.info("(Extractor.loadMappings): Reading mappings from: ${mapName}")
+
     def inSR = new InputStreamReader(mapStream, 'UTF8')
     inSR.eachLine { line ->
       def fields = line.split(',')
       if (fields.size() == 2) {
-        MAPPINGS.put(fields[0].trim(), fields[1].trim())
-        cnt += 1
+        mappings.put(fields[0].trim(), fields[1].trim())
+        mCnt += 1
       }
     }
-    return cnt
+
+    mappings.each { entry -> println("${entry.key}=${entry.value}") } // REMOVE LATER
+    if (VERBOSE)
+      log.info("(Extractor.main): Read ${mCnt} field mappings.")
+
+    return mappings
   }
+
 
   /** Process the files in all subdirectories of the given top-level directory. */
   def processDirs (worker, topDirectory) {
