@@ -12,13 +12,15 @@ import groovy.cli.commons.CliBuilder
  *   This class parses and validates arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Handle external mappings file and default mappings resource.
+ *   Last Modified: Ignore empty, comment, and NOP mapfile lines.
  */
 class Extractor implements FilenameFilter {
 
   static final Logger log = LogManager.getLogger(Extractor.class.getName());
 
-  static final String DEFAULT_MAP_FILEPATH = "/jwst-mappings.txt"
+  static final String COMMENT_MARKER = "#"
+  static final String NOP_ENTRY_KEY = "_NOP_"
+  static final String DEFAULT_MAP_FILEPATH = "/null-mappings.txt"
 
   public boolean DEBUG   = false
   public boolean VERBOSE = false
@@ -184,10 +186,17 @@ class Extractor implements FilenameFilter {
 
     def inSR = new InputStreamReader(mapStream, 'UTF8')
     inSR.eachLine { line ->
-      def fields = line.split(',')
-      if (fields.size() == 2) {
-        mappings.put(fields[0].trim(), fields[1].trim())
-        mCnt += 1
+      if (line.trim().isEmpty() ||
+          line.startsWith(COMMENT_MARKER) ||
+          line.startsWith(NOP_ENTRY_KEY)) {
+        // ignore empty lines, comment lines, or not yet implemented lines
+      }
+      else {                                // line passes basic checks
+        def fields = line.split(',')
+        if (fields.size() == 2) {
+          mappings.put(fields[0].trim(), fields[1].trim())
+          mCnt += 1
+        }
       }
     }
 
