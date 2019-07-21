@@ -9,7 +9,7 @@ _NOP_   , calib_level
 
 # Target Information (section B.2)
 #
-OBJECT  , target_name
+_NOP_   , target_name
 
 # Data Descriptions (section B.3)
 #
@@ -28,10 +28,8 @@ _NOP_   , access_estsize
 
 # Spatial Characterisation (section B.6.1)
 #
-RA      , s_ra
-right_ascension, s_ra
-DEC     , s_dec
-declination, s_dec
+_NOP_   , s_ra
+_NOP_   , s_dec
 _NOP_   , s_fov
 _NOP_   , s_region
 _NOP_   , s_resolution
@@ -48,13 +46,13 @@ _NOP_   , em_res_power
 # Time Characterisation (section B.6.3)
 #
 _NOP_   , t_xel
-DATE-BEG, t_min
-DATE-OBS, t_min
-MJD-OBS , t_min
-TSTART  , t_min
-DATE-END, t_max
-MJD-END , t_max
-TSTOP   , t_max
+_NOP_   , t_min
+_NOP_   , t_min
+_NOP_   , t_min
+_NOP_   , t_min
+_NOP_   , t_max
+_NOP_   , t_max
+_NOP_   , t_max
 _NOP_   , t_exptime
 _NOP_   , t_resolution
 
@@ -69,16 +67,5 @@ _NOP_   , pol_states
 
 # Provenance (section B.7)
 #
-TELESCOP, facility_name
-INSTRUME, instrument_name
-
-
-#
-# Non-Mandatory ObsCore
-#
-OBSERVER, obs_creator_name
-
-
-#
-# Other fieldnames
-#
+_NOP_   , facility_name
+_NOP_   , instrument_name
