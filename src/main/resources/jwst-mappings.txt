@@ -50,15 +50,16 @@ _NOP_   , em_res_power
 _NOP_   , t_xel
 DATE-BEG, t_min
 DATE-OBS, t_min
+MJD     , t_min
 MJD-OBS , t_min
 TSTART  , t_min
 DATE-END, t_max
 MJD-END , t_max
 TSTOP   , t_max
-_NOP_   , t_exptime
+EXPTIME , t_exptime
 _NOP_   , t_resolution
 
-# Observalbe Axis (section B.6.4)
+# Observable Axis (section B.6.4)
 #
 _NOP_   , o_ucd
 
@@ -82,3 +83,11 @@ OBSERVER, obs_creator_name
 #
 # Other fieldnames
 #
+EQUINOX , equinox
+RADESYS , radesys
+
+CHANNEL , nircam_channel
+MODULE  , nircam_module
+FILTER  , filter
+PUPIL   , pupil
+READPATT, read_pattern
