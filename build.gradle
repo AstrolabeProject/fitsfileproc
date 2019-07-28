@@ -29,8 +29,8 @@ dependencies {
 //   groovyOptions.configurationScript = file("src/conf/config.groovy")
 // }
 
-version = '0.0.2'
-mainClassName = 'edu.arizona.astrolabe.extractor.Extractor'
+version = '0.0.4'
+mainClassName = 'edu.arizona.astrolabe.ffp.FitsFileProcessor'
 sourceCompatibility = 1.8
 
 shadowJar {

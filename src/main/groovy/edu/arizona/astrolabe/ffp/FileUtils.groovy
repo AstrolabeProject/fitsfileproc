@@ -1,4 +1,4 @@
-package edu.arizona.astrolabe.extractor
+package edu.arizona.astrolabe.ffp
 
 import java.io.*
 // import java.util.zip.GZIPInputStream
@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   All methods in this class are static and may be called directly.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Split out from main module.
+ *   Last Modified: Continue refactoring: package and class renames.
  */
 class FileUtils  {
 

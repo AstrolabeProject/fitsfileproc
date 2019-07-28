@@ -1,17 +1,17 @@
-package edu.arizona.astrolabe.extractor
+package edu.arizona.astrolabe.ffp
 
 import java.io.*
 // import java.util.zip.GZIPInputStream
 import org.apache.logging.log4j.*
 
 /**
- * Astrolabe JWST-specific FITS file metadata extractor class.
- *   This class implements JWST-specific extraction methods.
+ * Astrolabe JWST-specific FITS file processor class.
+ *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Initial creation by split from main module.
+ *   Last Modified: Continue refactoring: package and class renames.
  */
-class JwstProcessor implements FitsFileProcessor {
+class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
 
   static final String COMMENT_MARKER = "#"

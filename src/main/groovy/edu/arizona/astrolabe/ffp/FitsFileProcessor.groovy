@@ -1,4 +1,4 @@
-package edu.arizona.astrolabe.extractor
+package edu.arizona.astrolabe.ffp
 
 import java.io.*
 import java.util.zip.GZIPInputStream
@@ -12,11 +12,11 @@ import groovy.cli.commons.CliBuilder
  *   This class parses and validates its arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Refactor into file utilities and separate processors.
+ *   Last Modified: Continue refactoring: package and class renames.
  */
-class Extractor {
+class FitsFileProcessor {
 
-  static final Logger log = LogManager.getLogger(Extractor.class.getName());
+  static final Logger log = LogManager.getLogger(FitsFileProcessor.class.getName());
 
   static boolean DEBUG   = false
   static boolean VERBOSE = false
@@ -25,7 +25,7 @@ class Extractor {
   public static void main (String[] args) {
 
     // read, parse, and validate command line arguments
-    def usage = 'processFitsFiles [-h] [-m mapfilepath] [-t extractor-type] (FITS-file|FITS-directory)..'
+    def usage = 'java -jar ffp.jar [-h] [-m mapfilepath] [-t processor-type] (FITS-file|FITS-directory)..'
     def cli = new CliBuilder(usage: usage)
     cli.width = 100                         // increase usage message width
     cli.with {
@@ -35,7 +35,7 @@ class Extractor {
       m(longOpt:  'mapfile',   args:1, argName: 'mapfile',
         'File containing FITS fieldname mappings.')
       t(longOpt:  'type',      args:1, argName: 'procType',
-        'Which extractor type to use (default: jwst.')
+        'Which processor type to use (default: jwst.')
       v(longOpt:  'verbose',  'Run in verbose mode (default: non-verbose).')
     }
     def options = cli.parse(args)           // parse command line
@@ -47,7 +47,7 @@ class Extractor {
       return                                // exit out now
     }
 
-    // extract global flags
+    // set global flags
     this.VERBOSE = options.v ?: false
     this.DEBUG = options.d ?: false
 
@@ -61,12 +61,12 @@ class Extractor {
       }
     }
 
-    // instantiate a specialized extractor with the specified settings
+    // instantiate a specialized processor with the specified settings
     def settings = [ 'DEBUG':    DEBUG,
                      'mapfilename': mapfilename,
                      'VERBOSE':  VERBOSE ]
 
-    FitsFileProcessor processor = null
+    IFitsFileProcessor processor = null
     def whichProcessor = options.t ?: 'jwst'
     if (whichProcessor == 'jwst') {
       processor = new JwstProcessor(settings)
@@ -90,12 +90,12 @@ class Extractor {
       }
       if (path.isDirectory()) {
         if (VERBOSE)
-          log.info("(ProcessFitsFiles.main): Processing FITS files in '${path}'")
+          log.info("(FitsFileProcessor.main): Processing FITS files in '${path}'")
         procCount += processDirs(processor, path)
       }
       else if (path.isFile()) {
         if (VERBOSE)
-          log.info("(ProcessFitsFiles.main): Processing FITS file '${path}'")
+          log.info("(FitsFileProcessor.main): Processing FITS file '${path}'")
         procCount += processAFile(processor, path)
       }
       else {  /** should not happen so ignore the invalid path */ }
@@ -104,20 +104,20 @@ class Extractor {
     // processor.exit()                           // do any processor instance cleanup
 
     if (VERBOSE)
-      log.info("(ProcessFitsFiles.main): Processed ${procCount} FITS files.")
+      log.info("(FitsFileProcessor.main): Processed ${procCount} FITS files.")
   }
 
 
   /** Tell whether the given filename is to be processed or not. */
   static boolean isAcceptableFilename (String filename) {
-    log.trace("(ProcessFitsFiles.isAcceptableFilename): filename=$filename")
+    log.trace("(FitsFileProcessor.isAcceptableFilename): filename=$filename")
     // return FILE_TYPES.any { filename.endsWith(it) } // for a set of file types
     return filename.endsWith('.fits')
   }
 
   /** Return a (possibly empty) list of FITS Files in the current directory. */
   static List<File> listFitsFilesInDir (File dir) {
-    log.trace("(ProcessFitsFiles.listFitsFilesInDir): dir=${dir}")
+    log.trace("(FitsFileProcessor.listFitsFilesInDir): dir=${dir}")
     return dir.listFiles( new FilenameFilter() {
       boolean accept (java.io.File not_used, java.lang.String filename) {
         return isAcceptableFilename(filename)   // ** directory argument ignored **
@@ -127,7 +127,7 @@ class Extractor {
 
   /** Process the files in all subdirectories of the given top-level directory. */
   static int processDirs (processor, topDirectory) {
-    log.trace("(ProcessFitsFiles.processDirs): processor=${processor}, topDirectory=${topDirectory}")
+    log.trace("(FitsFileProcessor.processDirs): processor=${processor}, topDirectory=${topDirectory}")
     int cnt = processFiles(processor, topDirectory)
     topDirectory.eachDirRecurse { dir ->
       if (FileUtils.goodDirectory(dir)) {
@@ -139,7 +139,7 @@ class Extractor {
 
   /** Process the files in the given directory. */
   static int processFiles (processor, directory) {
-    log.trace("(ProcessFitsFiles.processFiles): processor=${processor}, dir=${directory}")
+    log.trace("(FitsFileProcessor.processFiles): processor=${processor}, dir=${directory}")
     int cnt = 0
     List fileList = listFitsFilesInDir(directory)
     // def fileList = directory.listFiles(this) as List
@@ -156,7 +156,7 @@ class Extractor {
 
   /** Process the single given file with the given processor. */
   static int processAFile (processor, aFile) {
-    log.trace("(ProcessFitsFiles.processAFile): processor=${processor}, aFile=${aFile}")
+    log.trace("(FitsFileProcessor.processAFile): processor=${processor}, aFile=${aFile}")
     println("FILE: ${aFile.getName()}")     // REMOVE LATER
     // TODO: IMPLEMENT LATER
     return 1
@@ -164,7 +164,7 @@ class Extractor {
 
   /** Return a (possibly empty) list of valid file/directory paths. */
   static List validatePathStrings (List pathStrings) {
-    log.trace("(ProcessFitsFiles.validatePathStrings): pathStrings=$pathStrings")
+    log.trace("(FitsFileProcessor.validatePathStrings): pathStrings=$pathStrings")
     pathStrings.findResults { pathname ->
       if (isAcceptableFilename(pathname))
         FileUtils.goodFilePath(pathname)
@@ -179,5 +179,5 @@ class Extractor {
 /**
  * Interface specifying behavior for classes which process FITS files for Astrolabe.
  */
-interface FitsFileProcessor {
+interface IFitsFileProcessor {
 }
