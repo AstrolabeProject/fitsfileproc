@@ -12,11 +12,12 @@ import groovy.cli.commons.CliBuilder
  *   This class parses and validates its arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Move top-level processing stub to the instantiated processor.
+ *   Last Modified: Allow gzipped FITS files.
  */
 class FitsFileProcessor {
 
   static final Logger log = LogManager.getLogger(FitsFileProcessor.class.getName());
+  static final List FILE_TYPES = ['.fits', '.fits.gz']
 
   static boolean DEBUG   = false
   static boolean VERBOSE = false
@@ -111,8 +112,8 @@ class FitsFileProcessor {
   /** Tell whether the given filename is to be processed or not. */
   static boolean isAcceptableFilename (String filename) {
     log.trace("(FitsFileProcessor.isAcceptableFilename): filename=$filename")
-    // return FILE_TYPES.any { filename.endsWith(it) } // for a set of file types
-    return filename.endsWith('.fits')
+    // return filename.endsWith('.fits') || filename.endsWith('fits.gz')
+    return FILE_TYPES.any { filename.endsWith(it) }
   }
 
   /** Return a (possibly empty) list of FITS Files in the current directory. */
@@ -174,4 +175,7 @@ class FitsFileProcessor {
 interface IFitsFileProcessor {
   /** Process the single given file. */
   int processAFile (File aFile);
+
+  /** Do any needed processor instance cleanup. */
+  // void exit()
 }

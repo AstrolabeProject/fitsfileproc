@@ -1,7 +1,8 @@
 package edu.arizona.astrolabe.ffp
 
 import java.io.*
-// import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPInputStream
+import nom.tam.fits.*
 import org.apache.logging.log4j.*
 
 /**
@@ -9,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Continue refactoring: package and class renames.
+ *   Last Modified: Add proof-of-concept header reader using nam-tam-fits.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -43,21 +44,50 @@ class JwstProcessor implements IFitsFileProcessor {
 
     // load the FITS fieldname mappings data
     MAPPINGS = loadMappings(mapfile)
-    MAPPINGS.each { entry -> println("${entry.key}=${entry.value}") } // REMOVE LATER  
+    if (DEBUG)
+      MAPPINGS.each { entry -> println("${entry.key}=${entry.value}") }
   }
 
 
   /** Process the single given file. */
   int processAFile (File aFile) {
     log.trace("(FitsFileProcessor.processAFile): aFile=${aFile}")
-    println("FILE: ${aFile.getName()}")     // REMOVE LATER
-    // TODO: IMPLEMENT LATER
+    if (DEBUG)
+      println("FILE: ${aFile.getName()}")
+
+    def fields = getFitsFields(aFile)
+    println("FIELDS(${fields.size()}): ${fields}")
+    fields.each { key, val -> println("${key}: ${val}") }
+
     return 1
   }
 
 
+  def getFitsFields (File aFile) {
+    Map hdrMap = [:]
+
+    Fits fits = null
+    if (aFile.getName().endsWith('.gz'))
+      fits = new Fits(new FileInputStream(aFile))
+    else
+      fits = new Fits(aFile)
+
+    Header hdr = fits.getHDU(0).getHeader()
+    def iter = hdr.iterator();
+    for(HeaderCard card=iter.next(); iter.hasNext(); card=iter.next()) {
+      if (card.isKeyValuePair()) {
+        def key = card.getKey()
+        def val = card.getValue()
+        hdrMap << [(key) : val]
+      }
+    }
+
+    return hdrMap
+  }
+
+
   /** Locate the mappings file, load the mappings, and return them. */
-  def loadMappings (File mapfile) {
+  private Map loadMappings (File mapfile) {
     log.trace("(JwstProcessor.loadMappings): mapfile=${mapfile}")
     def mCnt = 0
     def mappings = [:]
