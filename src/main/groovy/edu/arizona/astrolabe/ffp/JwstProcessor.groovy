@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Add proof-of-concept header reader using nam-tam-fits.
+ *   Last Modified: Begin extraction: get basic FITS values via nom-tam-fits BasicHDU class.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -44,7 +44,7 @@ class JwstProcessor implements IFitsFileProcessor {
 
     // load the FITS fieldname mappings data
     MAPPINGS = loadMappings(mapfile)
-    if (DEBUG)
+    if (DEBUG)                              // REMOVE LATER
       MAPPINGS.each { entry -> println("${entry.key}=${entry.value}") }
   }
 
@@ -52,27 +52,34 @@ class JwstProcessor implements IFitsFileProcessor {
   /** Process the single given file. */
   int processAFile (File aFile) {
     log.trace("(FitsFileProcessor.processAFile): aFile=${aFile}")
-    if (DEBUG)
+    if (DEBUG)                              // REMOVE LATER
       println("FILE: ${aFile.getName()}")
 
-    def fields = getFitsFields(aFile)
-    println("FIELDS(${fields.size()}): ${fields}")
-    fields.each { key, val -> println("${key}: ${val}") }
-
-    return 1
-  }
-
-
-  def getFitsFields (File aFile) {
-    Map hdrMap = [:]
-
+    // make FITS object from given FITS file
     Fits fits = null
     if (aFile.getName().endsWith('.gz'))
       fits = new Fits(new FileInputStream(aFile))
     else
       fits = new Fits(aFile)
+    fits.read()                             // read the data into FITS object
 
-    Header hdr = fits.getHDU(0).getHeader()
+    def fitsFields = getFitsFields(fits)
+    println("FITS FIELDS(${fitsFields.size()}): ${fitsFields}")
+    fitsFields.each { key, val -> println("${key}: ${val}") }
+
+    def allFields = getAllFields(fits)
+    println("ALL FIELDS(${allFields.size()}): ${allFields}")
+    allFields.each { key, val -> println("${key}: ${val}") }
+
+    return 1
+  }
+
+
+  def getAllFields (Fits refFits) {
+    log.trace("(FitsFileProcessor.getAllFields): refFits=${refFits}")
+    Map hdrMap = [:]
+
+    Header hdr = refFits.getHDU(0).getHeader()
     def iter = hdr.iterator();
     for(HeaderCard card=iter.next(); iter.hasNext(); card=iter.next()) {
       if (card.isKeyValuePair()) {
@@ -83,6 +90,30 @@ class JwstProcessor implements IFitsFileProcessor {
     }
 
     return hdrMap
+  }
+
+
+  def getFitsFields (Fits refFits) {
+    log.trace("(FitsFileProcessor.getFitsFields): refFits=${refFits}")
+    Map hdrMap = [:]
+
+    BasicHDU bhdu = refFits.getHDU(0)
+    Header hdr = bhdu.getHeader()
+    hdrMap = [
+      'NAXIS1'   : hdr.getIntValue('NAXIS1'), // FITS required keyword
+      'NAXIS2'   : hdr.getIntValue('NAXIS2'), // FITS required keyword
+      'AUTHOR'   : bhdu.getAuthor(),
+      'obs_creation_date' : bhdu.getCreationDate(),
+      'EQUINOX'  : bhdu.getEquinox(),
+      'INSTRUME' : bhdu.getInstrument(),
+      'OBJECT'   : bhdu.getObject(),
+      'DATE-OBS' : bhdu.getObservationDate(),
+      'OBSERVER' : bhdu.getObserver(),
+      'ORIGIN'   : bhdu.getOrigin(),
+      'TELESCOP' : bhdu.getInstrument()
+    ]
+
+    return hdrMap.findAll { it.value != null } // filter out null values
   }
 
 
