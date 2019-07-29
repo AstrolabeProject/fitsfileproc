@@ -47,6 +47,15 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
 
+  /** Process the single given file. */
+  int processAFile (File aFile) {
+    log.trace("(FitsFileProcessor.processAFile): aFile=${aFile}")
+    println("FILE: ${aFile.getName()}")     // REMOVE LATER
+    // TODO: IMPLEMENT LATER
+    return 1
+  }
+
+
   /** Locate the mappings file, load the mappings, and return them. */
   def loadMappings (File mapfile) {
     log.trace("(JwstProcessor.loadMappings): mapfile=${mapfile}")

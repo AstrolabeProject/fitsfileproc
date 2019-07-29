@@ -12,7 +12,7 @@ import groovy.cli.commons.CliBuilder
  *   This class parses and validates its arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Continue refactoring: package and class renames.
+ *   Last Modified: Move top-level processing stub to the instantiated processor.
  */
 class FitsFileProcessor {
 
@@ -96,7 +96,7 @@ class FitsFileProcessor {
       else if (path.isFile()) {
         if (VERBOSE)
           log.info("(FitsFileProcessor.main): Processing FITS file '${path}'")
-        procCount += processAFile(processor, path)
+        procCount += processor.processAFile(path)
       }
       else {  /** should not happen so ignore the invalid path */ }
     }
@@ -148,18 +148,10 @@ class FitsFileProcessor {
       if (!aFile)
         return                      // exit out now if not a valid file
       else {
-        cnt += processAFile(processor, aFile)
+        cnt += processor.processAFile(aFile) // call processor to process the file
       }
     }
     return cnt
-  }
-
-  /** Process the single given file with the given processor. */
-  static int processAFile (processor, aFile) {
-    log.trace("(FitsFileProcessor.processAFile): processor=${processor}, aFile=${aFile}")
-    println("FILE: ${aFile.getName()}")     // REMOVE LATER
-    // TODO: IMPLEMENT LATER
-    return 1
   }
 
   /** Return a (possibly empty) list of valid file/directory paths. */
@@ -180,4 +172,6 @@ class FitsFileProcessor {
  * Interface specifying behavior for classes which process FITS files for Astrolabe.
  */
 interface IFitsFileProcessor {
+  /** Process the single given file. */
+  int processAFile (File aFile);
 }
