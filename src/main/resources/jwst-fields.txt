@@ -1,0 +1,85 @@
+#
+# Mandatory ObsCore Data Model fields
+#
+
+# Observation Information (section B.1)
+#
+dataproduct_type, string
+calib_level, integer
+
+# Target Information (section B.2)
+#
+target_name, string
+
+# Data Descriptions (section B.3)
+#
+obs_id, string
+obs_collection, string
+
+# Curation Information (section B.4)
+#
+obs_publisher_did, string
+
+# Access Information (section B.5)
+#
+access_url, string
+access_format, string
+access_estsize, integer
+
+# Spatial Characterisation (section B.6.1)
+#
+s_ra, double
+s_dec, double
+s_fov, double
+s_region, string
+s_resolution, double
+s_xel1, integer
+s_xel2, integer
+
+# Spectral Characterisation (section B.6.2)
+#
+em_xel, integer
+em_min, double
+em_max, double
+em_res_power, double
+
+# Time Characterisation (section B.6.3)
+#
+t_xel, integer
+t_min, double
+t_max, double
+t_exptime, double
+t_resolution, double
+
+# Observable Axis (section B.6.4)
+#
+o_ucd, string
+
+# Polarization Characterisation (section B.6.5)
+#
+pol_xel, integer
+pol_states, string
+
+# Provenance (section B.7)
+#
+facility_name, string
+instrument_name, string
+
+
+#
+# Non-Mandatory ObsCore
+#
+obs_creator_name, string
+
+
+#
+# Other fieldnames
+#
+equinox, double
+radesys, string
+
+nircam_channel, string
+nircam_module, string
+filter, string
+pupil, string
+read_pattern, string

@@ -10,19 +10,23 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Begin extraction: get basic FITS values via nom-tam-fits BasicHDU class.
+ *   Last Modified: Update for rename of aliases file and addition of field info file.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
 
   static final String COMMENT_MARKER = "#"
   static final String NOP_ENTRY_KEY = "_NOP_"
-  static final String DEFAULT_MAP_FILEPATH = "/jwst-mappings.txt"
+  static final String DEFAULT_ALIASES_FILEPATH = "/jwst-aliases.txt"
+  static final String DEFAULT_FIELDS_FILEPATH = "/jwst-fields.txt"
 
   Map config                                // configuration information
-  Map MAPPINGS
-  boolean DEBUG   = false
-  boolean VERBOSE = false
+  Map fitsAliases                           // map renaming FITS field names to ObsCore names
+  Map fitsFields                            // map defining fields extracted from a FITS file
+
+  boolean DEBUG   = false                   // when true show internal information for debugging
+  boolean VERBOSE = false                   // when true show extra information
+
 
   /** Public constructor taking a map of configuration settings. */
   public JwstProcessor (configuration) {
@@ -31,21 +35,15 @@ class JwstProcessor implements IFitsFileProcessor {
     this.DEBUG = configuration.DEBUG ?: false
     this.VERBOSE = configuration.VERBOSE ?: false
 
-    // validate the specified mappings file, if given
-    File mapfile = null
-    if (config.mapfilename) {
-      mapfile = Utils.goodFilePath(config.mapfilename)
-      if (!mapfile) {
-        System.err.println(
-          "Unable to find and read specified mappings file '${config.mapfilename}'. Exiting...")
-        System.exit(10)
-      }
-    }
-
-    // load the FITS fieldname mappings data
-    MAPPINGS = loadMappings(mapfile)
+    // load the FITS field name aliases from a given file path or a default resource path.
+    fitsAliases = loadAliases(config.aliasFile)
     if (DEBUG)                              // REMOVE LATER
-      MAPPINGS.each { entry -> println("${entry.key}=${entry.value}") }
+      fitsAliases.each { entry -> println("${entry.key}=${entry.value}") }
+
+    // load the field info from a given file or a default resource path.
+    fitsFields = loadFields(config.fieldsFile)
+    if (DEBUG)                              // REMOVE LATER
+      fitsAliases.each { entry -> println("${entry.key}=${entry.value}") }
   }
 
 
@@ -61,15 +59,26 @@ class JwstProcessor implements IFitsFileProcessor {
       fits = new Fits(new FileInputStream(aFile))
     else
       fits = new Fits(aFile)
-    fits.read()                             // read the data into FITS object
 
-    def fitsFields = getFitsFields(fits)
-    println("FITS FIELDS(${fitsFields.size()}): ${fitsFields}")
-    fitsFields.each { key, val -> println("${key}: ${val}") }
+    try {
+      fits.read()                             // read the data into FITS object
+    }
+    catch (Exception iox) {
+      def msg = "Invalid FITS Header encountered in file '${aFile.getAbsolutePath()}'. File processing skipped."
+      log.warn("(JwstProcessor.processAFile): $msg")
+      System.err.println("WARNING: $msg")
+      return 0
+    }
+
+    // def fitsFields = getFitsFields(fits)
+    // println("FITS FIELDS(${fitsFields.size()}): ${fitsFields}")
+    // fitsFields.each { key, val -> println("${key}: ${val}") }
 
     def allFields = getAllFields(fits)
-    println("ALL FIELDS(${allFields.size()}): ${allFields}")
-    allFields.each { key, val -> println("${key}: ${val}") }
+    if (DEBUG) {                            // REMOVE LATER
+      println("ALL FIELDS(${allFields.size()}): ${allFields}")
+      allFields.each { key, val -> println("${key}: ${val}") }
+    }
 
     return 1
   }
@@ -117,25 +126,25 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
 
-  /** Locate the mappings file, load the mappings, and return them. */
-  private Map loadMappings (File mapfile) {
-    log.trace("(JwstProcessor.loadMappings): mapfile=${mapfile}")
-    def mCnt = 0
-    def mappings = [:]
-    def mapStream
-    def mapName = DEFAULT_MAP_FILEPATH
+  /** Locate the aliases file, load the aliases, and return them. */
+  private Map loadAliases (File aliasFile) {
+    log.trace("(JwstProcessor.loadAliases): aliasFile=${aliasFile}")
+    def aliasCnt = 0
+    def aliases = [:]
+    def aliasStream
+    def aliasFilepath = DEFAULT_ALIASES_FILEPATH
 
-    if (mapfile) {                          // if given external map file, use it
-      mapStream = new FileInputStream(mapfile)
-      mapName = mapfile.getAbsolutePath()
+    if (aliasFile) {                          // if given external aliases file, use it
+      aliasStream = new FileInputStream(aliasFile)
+      aliasFilepath = aliasFile.getAbsolutePath()
     }
     else                                    // else fallback to default resource
-      mapStream = this.getClass().getResourceAsStream(DEFAULT_MAP_FILEPATH);
+      aliasStream = this.getClass().getResourceAsStream(DEFAULT_ALIASES_FILEPATH);
 
     if (VERBOSE)
-      log.info("(JwstProcessor.loadMappings): Reading mappings from: ${mapName}")
+      log.info("(JwstProcessor.loadAliases): Reading aliases from: ${aliasFilepath}")
 
-    def inSR = new InputStreamReader(mapStream, 'UTF8')
+    def inSR = new InputStreamReader(aliasStream, 'UTF8')
     inSR.eachLine { line ->
       if (line.trim().isEmpty() ||
           line.startsWith(COMMENT_MARKER) ||
@@ -145,16 +154,55 @@ class JwstProcessor implements IFitsFileProcessor {
       else {                                // line passes basic checks
         def fields = line.split(',')
         if (fields.size() == 2) {
-          mappings.put(fields[0].trim(), fields[1].trim())
-          mCnt += 1
+          aliases.put(fields[0].trim(), fields[1].trim())
+          aliasCnt += 1
         }
       }
     }
 
     if (VERBOSE)
-      log.info("(JwstProcessor.loadMappings): Read ${mCnt} field mappings.")
+      log.info("(JwstProcessor.loadAliases): Read ${aliasCnt} field name aliases.")
 
-    return mappings
+    return aliases
+  }
+
+
+  /** Locate the fields info file, load the fields, and return them. */
+  private Map loadFields (File fieldsFile) {
+    log.trace("(JwstProcessor.loadFields): fieldsFile=${fieldsFile}")
+    def recCnt = 0
+    def fields = [:]
+    def fieldStream
+    def fieldsFilepath = DEFAULT_FIELDS_FILEPATH
+
+    if (fieldsFile) {                       // if given external fields file, use it
+      fieldStream = new FileInputStream(fieldsFile)
+      fieldsFilepath = fieldsFile.getAbsolutePath()
+    }
+    else                                    // else fallback to default resource
+      fieldStream = this.getClass().getResourceAsStream(DEFAULT_FIELDS_FILEPATH);
+
+    if (VERBOSE)
+      log.info("(JwstProcessor.loadFields): Reading field information from: ${fieldsFilepath}")
+
+    def inSR = new InputStreamReader(fieldStream, 'UTF8')
+    inSR.eachLine { line ->
+      if (line.trim().isEmpty() || line.startsWith(COMMENT_MARKER)) {
+        // ignore empty lines and comment lines
+      }
+      else {                                // line passes basic checks
+        def flds = line.split(',').collect{it.trim()}
+        if (flds.size() > 1) {              // must be at least two fields
+          fields.put(flds[0], flds)         // store all fields keyed by first field
+          recCnt += 1
+        }
+      }
+    }
+
+    if (VERBOSE)
+      log.info("(JwstProcessor.loadFields): Read ${recCnt} field information records.")
+
+    return fields
   }
 
 }

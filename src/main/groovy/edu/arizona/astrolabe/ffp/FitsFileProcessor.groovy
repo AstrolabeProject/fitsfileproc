@@ -12,7 +12,7 @@ import groovy.cli.commons.CliBuilder
  *   This class parses and validates its arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Allow gzipped FITS files.
+ *   Last Modified: Renamed aliases file. Added fields info file. Added alias/fields file validators.
  */
 class FitsFileProcessor {
 
@@ -26,18 +26,20 @@ class FitsFileProcessor {
   public static void main (String[] args) {
 
     // read, parse, and validate command line arguments
-    def usage = 'java -jar ffp.jar [-h] [-m mapfilepath] [-t processor-type] (FITS-file|FITS-directory)..'
+    def usage = 'java -jar ffp.jar [-h] [-a aliases] [-f fields] [-t processor-type] (FITS-file|FITS-directory)..'
     def cli = new CliBuilder(usage: usage)
     cli.width = 100                         // increase usage message width
     cli.with {
+      a(longOpt:  'aliases',   args:1, argName: 'aliases',
+        'File containing custom FITS header field name aliases (default "jwst-aliases")')
       h(longOpt:  'help',     'Show usage information.')
       d(longOpt:  'debug',
-        'Print debugging output in addition to normal processing (default false).')
-      m(longOpt:  'mapfile',   args:1, argName: 'mapfile',
-        'File containing FITS fieldname mappings.')
+        'Print debugging output in addition to normal processing (default false)')
+      f(longOpt:  'fields',   args:1, argName: 'fields',
+        'File containing custom FITS header field information (default "jwst-fields").')
       t(longOpt:  'type',      args:1, argName: 'procType',
-        'Which processor type to use (default: jwst.')
-      v(longOpt:  'verbose',  'Run in verbose mode (default: non-verbose).')
+        'Which processor type to use (default: "jwst")')
+      v(longOpt:  'verbose',  'Run in verbose mode (default: non verbose mode).')
     }
     def options = cli.parse(args)           // parse command line
 
@@ -52,21 +54,20 @@ class FitsFileProcessor {
     this.VERBOSE = options.v ?: false
     this.DEBUG = options.d ?: false
 
-    // validate the specified mappings filename, if given
-    String mapfilename = options.m ?: null
-    if (mapfilename) {
-      if (!FileUtils.goodFilePath(mapfilename)) {
-        System.err.println(
-          "Error: Unable to find and read specified mappings file '${mapfilename}'. Exiting...")
-        System.exit(1)
-      }
-    }
+    // if an external aliases filepath is given, check that it exists and is readable
+    File aliasFile = validateAliasesFilepath(options.a ?: null)
+
+    // if an external fields info filepath is given, check that it exists and is readable
+    File fieldsFile = validateFieldsFilepath(options.f ?: null)
 
     // instantiate a specialized processor with the specified settings
-    def settings = [ 'DEBUG':    DEBUG,
-                     'mapfilename': mapfilename,
-                     'VERBOSE':  VERBOSE ]
+    def settings = [ 'DEBUG': DEBUG, 'VERBOSE': VERBOSE ]
+    if (aliasFile)
+      settings << [ 'aliasFile': aliasFile ]
+    if (fieldsFile)
+      settings << [ 'fieldsFile': fieldsFile ]
 
+    // figure out which processor will be used on the input files (currently only one is available):
     IFitsFileProcessor processor = null
     def whichProcessor = options.t ?: 'jwst'
     if (whichProcessor == 'jwst') {
@@ -153,6 +154,51 @@ class FitsFileProcessor {
       }
     }
     return cnt
+  }
+
+
+  /**
+   * Checks the given aliases filepath for validity, as follows:
+   *   if given a null or empty filepath, return null,
+   *   if given a non-empty filepath, validate the readability of the file:
+   *     if file is readable, return a Java File object for the file,
+   *     else exit the program immediately with an error message and exit code.
+   * NB: an invalid aliases filepath will cause the program to terminate here!
+   */
+  static File validateAliasesFilepath (String filepath) {
+    log.trace("(FitsFileProcessor.validateAliasesFilepath): filepath=$filepath")
+    File aliasFile = null
+    if (filepath) {
+      aliasFile = FileUtils.goodFilePath(filepath)
+      if (!aliasFile) {
+        System.err.println(
+          "Error: Unable to find and read the specified aliases file '${filepath}'. Exiting...")
+        System.exit(10)
+      }
+    }
+    return aliasFile
+  }
+
+  /**
+   * Checks the given fields filepath for validity, as follows:
+   *   if given a null or empty filepath, return null,
+   *   if given a non-empty filepath, validate the readability of the file:
+   *     if file is readable, return a Java File object for the file,
+   *     else exit the program immediately with an error message and exit code.
+   * NB: an invalid fields filepath will cause the program to terminate here!
+   */
+  static File validateFieldsFilepath (String filepath) {
+    log.trace("(FitsFileProcessor.validateFieldsFilepath): filepath=$filepath")
+    File fieldsFile = null
+    if (filepath) {
+      fieldsFile = FileUtils.goodFilePath(filepath)
+      if (!fieldsFile) {
+        System.err.println(
+          "Error: Unable to find and read the specified fields info file '${filepath}'. Exiting...")
+        System.exit(11)
+      }
+    }
+    return fieldsFile
   }
 
   /** Return a (possibly empty) list of valid file/directory paths. */
