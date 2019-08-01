@@ -1,10 +1,13 @@
 # Information about FITS header fields to be processed.
-#  Format: obscore_key, field_type, required, default_value
+#  Format: obsCoreKey, datatype, required, default
 #   where:
-#     obscore_key   = the ObsCore or custom field name (keyword) to be extracted or created
-#     field_type    = field data type (double, integer, string)
-#     required      = true if required, false if optional
-#     default_value = default value for an unspecified field (* = set by program or no default)
+#     obsCoreKey = the ObsCore or custom field name (keyword) to be extracted or created
+#     datatype   = field data type (double, integer, string)
+#     required   = true if field is required, false if optional
+#     default    = default value for an unspecified field (* = set by program or no default)
+#
+# This first data line contains the column names for this file and is required:
+_COLUMN_NAMES_, obsCoreKey, datatype, required, default
 
 
 # Mandatory ObsCore Data Model fields

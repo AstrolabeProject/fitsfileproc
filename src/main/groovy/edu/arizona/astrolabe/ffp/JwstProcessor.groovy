@@ -10,22 +10,46 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Refactor FITS file read & get all fields. Add get all keys method. Outline TODO items.
+ *   Last Modified: Map aliases, get field info. Add column names to resource files.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
 
+  /** String which defines a comment line in the JWST resource files. */
   static final String COMMENT_MARKER = "#"
+
+  /** String which defines the line containing column_names in the JWST resource files. */
+  static final String COLUMN_NAME_MARKER = "_COLUMN_NAMES_"
+
+  /** String which defines a "not yet implemented" line in the JWST resource files. */
   static final String NOP_ENTRY_KEY = "_NOP_"
+
+  /** Default resource file for header keyword aliases. */
   static final String DEFAULT_ALIASES_FILEPATH = "/jwst-aliases.txt"
+
+  /** Default resource file for header field information. */
   static final String DEFAULT_FIELDS_FILEPATH = "/jwst-fields.txt"
 
-  Map config                                // configuration information
-  Map fitsAliases                           // map renaming FITS field names to ObsCore names
-  Map fitsFields                            // map defining fields extracted from a FITS file
 
-  boolean DEBUG   = false                   // when true show internal information for debugging
-  boolean VERBOSE = false                   // when true show extra information
+  /** Debug setting: when true, show internal information for debugging. */
+  boolean DEBUG   = false
+
+  /** Verbose setting: when true, show extra information about program operation. */
+  boolean VERBOSE = false
+
+  /** Configuration parameters given to this class in the constructor. */
+  private Map config
+
+  /** List of column names in the header field information file (with default values). */
+  private List fieldInfoColumnNames = [ "obsCoreKey", "datatype", "required", "default" ]
+
+  /** Mappping of FITS header keywords to ObsCore keywords.
+      Read from a given external file or a default internal resource file. */
+  private Map fitsAliases
+
+  /** Map defining header field information for fields used by this processor.
+      Read from a given external file or a default internal resource file. */
+  private Map fitsFields
 
 
   /** Public constructor taking a map of configuration settings. */
@@ -42,8 +66,10 @@ class JwstProcessor implements IFitsFileProcessor {
 
     // load the field info from a given file or a default resource path.
     fitsFields = loadFields(config.fieldsFile)
-    if (DEBUG)                              // REMOVE LATER
+    if (DEBUG) {                              // REMOVE LATER
+      println("COLUMN_NAMES=${fieldInfoColumnNames}")
       fitsFields.each { entry -> println("${entry.key}=${entry.value}") }
+    }
   }
 
 
@@ -55,8 +81,9 @@ class JwstProcessor implements IFitsFileProcessor {
     if (!fits)                              // if unable to open/read FITS file
       return 0                              // then skip this file
 
-    def allKeys = getAllKeys(fits)
-    if (DEBUG) {                            // REMOVE LATER
+    def allKeys = getAllKeys(fits)          // get keywords from FITS file header
+
+    if (DEBUG) {                                         // REMOVE LATER
       println("ALL KEYS(${allKeys.size()}): ${allKeys}") // REMOVE LATER
     }
 
@@ -69,23 +96,21 @@ class JwstProcessor implements IFitsFileProcessor {
     //   if value is computed: try dispatch to calculation routine
     //   if value still missing?: fill in null?
     // }
-    // NOTE: default for t_exptime given by Eiichi Egami 20190626: 1347
-    // NOTE: default for instrument_name = NIRCam + MODULE value
-    // NOTE: Ask Eiichi about o_ucd: what is being measured? photo.flux.density? others?
 
-
-    // def fitsFields = getFitsFields(fits)
-    // println("FITS FIELDS(${fitsFields.size()}): ${fitsFields}")
-    // fitsFields.each { key, val -> println("${key}: ${val}") }
-
-    // def allFields = getAllFields(fits)
-    // if (DEBUG) {                            // REMOVE LATER
-    //   println("ALL FIELDS(${allFields.size()}): ${allFields}")
-    //   allFields.each { key, val -> println("${key}: ${val}") }
-    // }
+    // process each key from the FITS file header
+    allKeys.each { hdrKey ->
+      def obsCoreKey = getObsCoreKeyFromAlias(hdrKey)
+      def fieldInfo = getObsCoreFieldInfo(obsCoreKey, hdrKey)
+      if (fieldInfo) {                      // process if we have info for this ObsCore key
+        if (DEBUG) {                        // REMOVE LATER
+          println("FIELDINFO=${fieldInfo}") // REMOVE LATER
+        }
+      }
+    }
 
     return 1
   }
+
 
 
   /**
@@ -134,6 +159,27 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
 
+  /** Return a field information map for the given ObsCore keyword, or null if none found.
+   *  If the optional FITS header keyword is given, it will be added to retrieved
+   *  information map (if any).
+   */
+  Map getObsCoreFieldInfo (obsCoreKey, hdrKey=null) {
+  def infoMap = null
+    def info = fitsFields.get(obsCoreKey)
+    if (info && (info.size() == fieldInfoColumnNames.size())) {
+      infoMap = [fieldInfoColumnNames, info].transpose().collectEntries()
+      if (hdrKey)
+        infoMap << [ "hdrKey": hdrKey ]
+    }
+    return infoMap
+  }
+
+  /** Return the ObsCore keyword for the given FITS header keyword, or null if none found. */
+  String getObsCoreKeyFromAlias (hdrKey) {
+    return fitsAliases.get(hdrKey)
+  }
+
+
   /** Locate the aliases file, load the aliases, and return them. */
   private Map loadAliases (File aliasFile) {
     log.trace("(JwstProcessor.loadAliases): aliasFile=${aliasFile}")
@@ -156,8 +202,9 @@ class JwstProcessor implements IFitsFileProcessor {
     inSR.eachLine { line ->
       if (line.trim().isEmpty() ||
           line.startsWith(COMMENT_MARKER) ||
-          line.startsWith(NOP_ENTRY_KEY)) {
-        // ignore empty lines, comment lines, or not yet implemented lines
+          line.startsWith(NOP_ENTRY_KEY) ||
+          line.startsWith(COLUMN_NAME_MARKER)) {
+        // ignore empty lines, comment lines, not yet implemented lines, and column name lines
       }
       else {                                // line passes basic checks
         def fields = line.split(',')
@@ -198,7 +245,13 @@ class JwstProcessor implements IFitsFileProcessor {
       if (line.trim().isEmpty() || line.startsWith(COMMENT_MARKER)) {
         // ignore empty lines and comment lines
       }
-      else {                                // line passes basic checks
+      else if (line.startsWith(COLUMN_NAME_MARKER)) { // line is a column name (header) line
+        def flds = line.split(',').collect{it.trim()}
+        if (flds.size() > 2) {              // must be at least two column names
+          fieldInfoColumnNames = flds[1..-1] // drop column_name_marker (first field)
+        }
+      }
+      else {                                // assume line is a data line
         def flds = line.split(',').collect{it.trim()}
         if (flds.size() > 1) {              // must be at least two fields
           fields.put(flds[0], flds)         // store all fields keyed by first field
@@ -238,5 +291,20 @@ class JwstProcessor implements IFitsFileProcessor {
 
     return fits                             // everything OK: return Fits object
   }
+
+
+    // def fitsFields = getFitsFields(fits)
+    // println("FITS FIELDS(${fitsFields.size()}): ${fitsFields}")
+    // fitsFields.each { key, val -> println("${key}: ${val}") }
+
+    // def allFields = getAllFields(fits)
+    // if (DEBUG) {                            // REMOVE LATER
+    //   println("ALL FIELDS(${allFields.size()}): ${allFields}")
+    //   allFields.each { key, val -> println("${key}: ${val}") }
+    // }
+
+    // NOTE: default for t_exptime given by Eiichi Egami 20190626: 1347
+    // NOTE: default for instrument_name = NIRCam + MODULE value
+    // NOTE: Ask Eiichi about o_ucd: what is being measured? photo.flux.density? others?
 
 }

@@ -1,8 +1,11 @@
 # List of FITS header keywords and their mapping to ObsCore terms.
 #  Format: fits_keyword, obscore_key
 #   where:
-#     fits_keyword = common or specialized FITS keyword
-#     obscore_key  = ObsCore equivalent or custom keyword
+#     fitsKey    = common or specialized FITS keyword
+#     obsCoreKey = ObsCore equivalent or custom keyword
+#
+# This first data line contains the column names for this file (currently not used by program):
+_COLUMN_NAMES_, fitsKey, obsCoreKey
 
 
 #
@@ -55,9 +58,11 @@ _NOP_   , em_res_power
 # Time Characterisation (section B.6.3)
 #
 _NOP_   , t_xel
-DATE    , t_min                             # for JWST this is the FITS timestamp (GMT)
+# for JWST, DATE is the FITS timestamp (GMT):
+DATE    , t_min
 DATE-BEG, t_min
-# DATE-OBS, t_min                           # for JWST this is date only, no time
+# for JWST, DATE-OBS is date only, no time
+# DATE-OBS, t_min
 MJD     , t_min
 MJD-OBS , t_min
 TSTART  , t_min
