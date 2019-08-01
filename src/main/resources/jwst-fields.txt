@@ -1,85 +1,93 @@
-#
+# Information about FITS header fields to be processed.
+#  Format: obscore_key, field_type, required, default_value
+#   where:
+#     obscore_key   = the ObsCore or custom field name (keyword) to be extracted or created
+#     field_type    = field data type (double, integer, string)
+#     required      = true if required, false if optional
+#     default_value = default value for an unspecified field (* = set by program or no default)
+
+
 # Mandatory ObsCore Data Model fields
 #
 
 # Observation Information (section B.1)
 #
-dataproduct_type, string
-calib_level, integer
+dataproduct_type, string, true, image
+calib_level, integer, true, 2
 
 # Target Information (section B.2)
 #
-target_name, string
+target_name, string, true, NO_TARGET_NAME
 
 # Data Descriptions (section B.3)
 #
-obs_id, string
-obs_collection, string
+obs_id, string, true, FAKE_OBS_ID_1
+obs_collection, string, true, JWST/NIRCam
 
 # Curation Information (section B.4)
 #
-obs_publisher_did, string
+obs_publisher_did, string, true, FAKE_OBS_PUBLISHER_DID
 
 # Access Information (section B.5)
 #
-access_url, string
-access_format, string
-access_estsize, integer
+access_url, string, true, http://astrolabe.arizona.edu/FAKE/acess_url
+access_format, string, true, application/FITS
+access_estsize, integer, true, *
 
 # Spatial Characterisation (section B.6.1)
 #
-s_ra, double
-s_dec, double
-s_fov, double
-s_region, string
-s_resolution, double
-s_xel1, integer
-s_xel2, integer
+s_ra, double, true, *
+s_dec, double, true, *
+s_fov, double, true, *
+s_region, string, true, *
+s_resolution, double, true, *
+s_xel1, integer, true, *
+s_xel2, integer, true, *
 
 # Spectral Characterisation (section B.6.2)
 #
-em_xel, integer
-em_min, double
-em_max, double
-em_res_power, double
+em_xel, integer, true, *
+em_min, double, true, *
+em_max, double, true, *
+em_res_power, double, true, *
 
 # Time Characterisation (section B.6.3)
 #
-t_xel, integer
-t_min, double
-t_max, double
-t_exptime, double
-t_resolution, double
+t_xel, integer, true, *
+t_min, double, true, *
+t_max, double, true, *
+t_exptime, double, true, *
+t_resolution, double, true, *
 
 # Observable Axis (section B.6.4)
 #
-o_ucd, string
+o_ucd, string, true, *
 
 # Polarization Characterisation (section B.6.5)
 #
-pol_xel, integer
-pol_states, string
+pol_xel, integer, true
+pol_states, string, true
 
 # Provenance (section B.7)
 #
-facility_name, string
-instrument_name, string
+facility_name, string, true, JWST
+instrument_name, string, true, *
 
 
 #
 # Non-Mandatory ObsCore
 #
-obs_creator_name, string
+obs_creator_name, string, false, FAKE_OBS_CREATOR_NAME
 
 
 #
-# Other fieldnames
+# JWST-specific fieldnames
 #
-equinox, double
-radesys, string
+equinox, double, false, 2000.0
+radesys, string, false, ICRS
 
-nircam_channel, string
-nircam_module, string
-filter, string
-pupil, string
-read_pattern, string
+nircam_channel, string, false, LONG
+nircam_module, string, false, A
+filter, string, false, *
+pupil, string, false, CLEAR
+read_pattern, string, false, DEEP8
