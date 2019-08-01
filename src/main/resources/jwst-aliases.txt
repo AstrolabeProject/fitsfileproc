@@ -1,3 +1,10 @@
+# List of FITS header keywords and their mapping to ObsCore terms.
+#  Format: fits_keyword, obscore_key
+#   where:
+#     fits_keyword = common or specialized FITS keyword
+#     obscore_key  = ObsCore equivalent or custom keyword
+
+
 #
 # Mandatory ObsCore Data Model fields
 #
@@ -48,8 +55,9 @@ _NOP_   , em_res_power
 # Time Characterisation (section B.6.3)
 #
 _NOP_   , t_xel
+DATE    , t_min                             # for JWST this is the FITS timestamp (GMT)
 DATE-BEG, t_min
-DATE-OBS, t_min
+# DATE-OBS, t_min                           # for JWST this is date only, no time
 MJD     , t_min
 MJD-OBS , t_min
 TSTART  , t_min
@@ -81,7 +89,7 @@ OBSERVER, obs_creator_name
 
 
 #
-# Other fieldnames
+# JWST-specific fieldnames
 #
 EQUINOX , equinox
 RADESYS , radesys
