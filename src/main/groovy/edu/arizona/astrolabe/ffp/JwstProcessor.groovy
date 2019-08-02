@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Refactor and simplify value extraction.
+ *   Last Modified: Add stubs for data flow methods. Cleanups. Move notes to end of file.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -50,7 +50,7 @@ class JwstProcessor implements IFitsFileProcessor {
       Read from a given external file or a default internal resource file. */
   private Map fitsAliases
 
-  /** Map defining header field information for fields used by this processor.
+  /** Map defining header field information for fields processed by this processor.
       Read from a given external file or a default internal resource file. */
   private Map fitsFields
 
@@ -83,30 +83,37 @@ class JwstProcessor implements IFitsFileProcessor {
     if (!fits)                              // if unable to open/read FITS file
       return 0                              // then skip this file
 
-    // TODO:
-    // for all keys read {
-    //   map key to ObsCore name
-    //   get datatype from ObsCore key in fields map
-    //   read value of datatype using original key
-    //   if value missing: try to get the default value
-    //   if value is computed: try dispatch to calculation routine
-    //   if value still missing?: fill in null?
-    // }
-
     Header header = fits.getHDU(0).getHeader() // get the header from the primary HDU
     Map headerFields = getHeaderFields(fits)   // get a map of all FITS headers and value strings
 
-    if (DEBUG) {                                         // REMOVE LATER
+    if (DEBUG) {                               // REMOVE LATER
       println("HDR FIELDS(${headerFields.size()}): ${headerFields}")
       // headerFields.each { key, val -> println("${key}: ${val}") }
     }
 
     Map fieldsInfo = fieldInfoForFitsHeaders(headerFields)
-    addValuesForFields(fieldsInfo)
+    addValuesForFields(fieldsInfo)          // fetch values from FITS file headers
+    computeValuesForFields(fieldsInfo)      // compute missing values
+    addDefaultValuesForFields(fieldsInfo)   // add defaults for missing values, if possible
+    ensureRequiredFields(fieldsInfo)        // check for all required fields
 
     return 1                                // successfully processed one more file
   }
 
+  private void addDefaultValuesForFields (Map fieldsInfo) {
+    // TODO: IMPLEMENT LATER
+    // NOTE: default for t_exptime given by Eiichi Egami 20190626: 1347
+    // NOTE: default for instrument_name = NIRCam + MODULE value
+    // NOTE: Ask Eiichi about o_ucd: what is being measured? photo.flux.density? others?
+  }
+
+  private void computeValuesForFields (Map fieldsInfo) {
+    // TODO: IMPLEMENT LATER
+  }
+
+  private void ensureRequiredFields (Map fieldsInfo) {
+    // TODO: IMPLEMENT LATER
+  }
 
   /**
    * Try to fetch a value of the correct type for each field in the given field
@@ -116,11 +123,10 @@ class JwstProcessor implements IFitsFileProcessor {
     log.trace("(JwstProcessor.findValuesForFields): fieldsInfo=${fieldsInfo}")
     fieldsInfo.each { key, fieldInfo ->
       addValueForAField(fieldInfo)
-      if (DEBUG)                            // REMOVE LATER
-        println("FIELDINFO=${fieldInfo}")   // REMOVE LATER
+      if (DEBUG)                                // REMOVE LATER
+        println("aVFF: FIELDINFO=${fieldInfo}") // REMOVE LATER
     }
   }
-
 
   /**
    * Get a value for the field with the given field information. Try to convert
@@ -129,11 +135,9 @@ class JwstProcessor implements IFitsFileProcessor {
   private boolean addValueForAField (Map fieldInfo) {
     log.trace("(JwstProcessor.addValueForAField): fieldInfo=${fieldInfo}")
 
-    def value = null                        // variable for extracted value
+    def value = null                        // return variable for extracted value
     def valueStr = fieldInfo['hdrValueStr'] // string value for header keyword
     def datatype = fieldInfo['datatype']    // data type for the value
-    def defaultStr = fieldInfo['default']   // default value string
-
     if ((valueStr == null) || !datatype)    // sanity check: need at least value and datatype
       return false                          // exit out now
 
@@ -150,14 +154,14 @@ class JwstProcessor implements IFitsFileProcessor {
           break
         default:
           def fitsKey = fieldInfo['hdrKey']       // header key from FITS file
-          def msg = "Unknown datatype '${datatype}' for field '${fitsKey}'. Ignoring field value."
+          def msg = "Unknown datatype '${datatype}' for field '${fitsKey}'. Ignoring bad field value."
           logError('JwstProcessor.addValueForAField', msg)
           value = null
           break
       }
     } catch (NumberFormatException nfe) {
       def fitsKey = fieldInfo['hdrKey']       // header key from FITS file
-      def msg = "Unable to convert value '${valueStr}' for field '${fitsKey}' to '${datatype}'. Ignoring field value."
+      def msg = "Unable to convert value '${valueStr}' for field '${fitsKey}' to '${datatype}'. Ignoring bad field value."
       logError('JwstProcessor.addValueForAField', msg)
       value = null
     }
@@ -166,8 +170,7 @@ class JwstProcessor implements IFitsFileProcessor {
       fieldInfo['value'] = value            // then save extracted value in the field info map
       return true                           // signal success
     }
-
-    return false                            // some problem: signal failure
+    return false                            // else some problem: signal failure
   }
 
 
@@ -394,18 +397,24 @@ class JwstProcessor implements IFitsFileProcessor {
     return fits                             // everything OK: return Fits object
   }
 
-    // def fitsFields = getFitsFields(fits)
-    // println("FITS FIELDS(${fitsFields.size()}): ${fitsFields}")
-    // fitsFields.each { key, val -> println("${key}: ${val}") }
-
-    // def allFields = getHeaderFields(fits)
-    // if (DEBUG) {                            // REMOVE LATER
-    //   println("ALL FIELDS(${allFields.size()}): ${allFields}")
-    //   allFields.each { key, val -> println("${key}: ${val}") }
-    // }
-
-    // NOTE: default for t_exptime given by Eiichi Egami 20190626: 1347
-    // NOTE: default for instrument_name = NIRCam + MODULE value
-    // NOTE: Ask Eiichi about o_ucd: what is being measured? photo.flux.density? others?
-
 }
+
+// TODO:
+// for all keys read {
+//   map key to ObsCore name
+//   get datatype from ObsCore key in fields map
+//   read value of datatype using original key
+//   if value missing: try to get the default value
+//   if value is computed: try dispatch to calculation routine
+//   if value still missing?: fill in null?
+// }
+
+// def fitsFields = getFitsFields(fits)
+// println("FITS FIELDS(${fitsFields.size()}): ${fitsFields}")
+// fitsFields.each { key, val -> println("${key}: ${val}") }
+
+// def allFields = getHeaderFields(fits)
+// if (DEBUG) {                            // REMOVE LATER
+//   println("ALL FIELDS(${allFields.size()}): ${allFields}")
+//   allFields.each { key, val -> println("${key}: ${val}") }
+// }
