@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Map aliases, get field info. Add column names to resource files.
+ *   Last Modified: Add method to get value for a header field. Add logError and logWarning.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -67,7 +67,6 @@ class JwstProcessor implements IFitsFileProcessor {
     // load the field info from a given file or a default resource path.
     fitsFields = loadFields(config.fieldsFile)
     if (DEBUG) {                              // REMOVE LATER
-      println("COLUMN_NAMES=${fieldInfoColumnNames}")
       fitsFields.each { entry -> println("${entry.key}=${entry.value}") }
     }
   }
@@ -81,7 +80,8 @@ class JwstProcessor implements IFitsFileProcessor {
     if (!fits)                              // if unable to open/read FITS file
       return 0                              // then skip this file
 
-    def allKeys = getAllKeys(fits)          // get keywords from FITS file header
+    Header header = fits.getHDU(0).getHeader() // get the header from the primary HDU
+    List allKeys = getAllKeys(fits)         // get keywords from FITS file header
 
     if (DEBUG) {                                         // REMOVE LATER
       println("ALL KEYS(${allKeys.size()}): ${allKeys}") // REMOVE LATER
@@ -99,51 +99,97 @@ class JwstProcessor implements IFitsFileProcessor {
 
     // process each key from the FITS file header
     allKeys.each { hdrKey ->
-      def obsCoreKey = getObsCoreKeyFromAlias(hdrKey)
+      def obsCoreKey = getObsCoreKeyFromAlias(hdrKey) // map header key to ObsCore key
       def fieldInfo = getObsCoreFieldInfo(obsCoreKey, hdrKey)
-      if (fieldInfo) {                      // process if we have info for this ObsCore key
-        if (DEBUG) {                        // REMOVE LATER
+      if (fieldInfo) {                      // if we have info for this ObsCore field process it
+        Map hdrFieldsMap = getAllFields(fits)
+        getValueForField(hdrFieldsMap, fieldInfo)
+        if (DEBUG)                          // REMOVE LATER
           println("FIELDINFO=${fieldInfo}") // REMOVE LATER
+      }
+      else                                  // unable to process this keyword w/o field info
+        return 0                            // signal failure
+    }
+
+    return 1                                // successfully processed one more file
+  }
+
+
+  /**
+   * Get a value for the field with the given field information. Try to read value, or
+   * use a default, or compute a value from other fields.
+   */
+  boolean getValueForField (Map hdrFieldsMap, Map fieldInfo) {
+    def value = null                        // return value
+    def fitsKey = fieldInfo['hdrKey']       // header key from FITS file
+    def valueStr = hdrFieldsMap[fitsKey]    // string value for header key
+    def dt = fieldInfo['datatype']          // data type for the value
+    def defaultStr = fieldInfo['default']   // default value string
+
+    if (valueStr != null) {
+      try {
+        switch(dt) {
+          case 'integer':
+            value = valueStr as Integer
+            break
+          case 'double':
+            value = valueStr as Double
+            break
+          case 'string':
+            value = valueStr
+            break
+          default:
+            def msg = "Unknown datatype '${dt}' for field '${fitsKey}'. Ignoring field value."
+            logError('JwstProcessor.getValueForField', msg)
+            value = null
+            break
         }
+      } catch (NumberFormatException nfe) {
+        def msg = "Unable to convert value '${valueStr}' for field '${fitsKey}' to '${dt}'. Ignoring field value."
+        logError('JwstProcessor.getValueForField', msg)
+        value = null
       }
     }
 
-    return 1
+    if (value != null) {
+      fieldInfo['value'] = value            // save extracted value in the field info map
+      return true                           // signal success
+    }
+    return false                            // some problem: signal failure
   }
-
 
 
   /**
    * Return a List of all non-comment (key/value pair) keywords
    * in the header of the first HDU of the given FITS file.
    */
-  List getAllKeys (Fits refFits) {
-    log.trace("(FitsFileProcessor.getAllKeys): refFits=${refFits}")
-    Header hdr = refFits.getHDU(0).getHeader()
-    return hdr.iterator().findAll{it.isKeyValuePair()}.collect{it.getKey()}
+  List getAllKeys (Fits fits) {
+    log.trace("(FitsFileProcessor.getAllKeys): fits=${fits}")
+    Header header = fits.getHDU(0).getHeader()
+    return header.iterator().findAll{it.isKeyValuePair()}.collect{it.getKey()}
   }
 
   /**
    * Return a Map of all non-comment (key/value pair) keywords and their values
    * in the header of the first HDU of the given FITS file.
    */
-  def getAllFields (Fits refFits) {
-    log.trace("(FitsFileProcessor.getAllFields): refFits=${refFits}")
-    Header hdr = refFits.getHDU(0).getHeader()
-    return hdr.iterator().findAll{it.isKeyValuePair()}.collectEntries {
+  Map getAllFields (Fits fits) {
+    log.trace("(FitsFileProcessor.getAllFields): fits=${fits}")
+    Header header = fits.getHDU(0).getHeader()
+    return header.iterator().findAll{it.isKeyValuePair()}.collectEntries {
       [ (it.getKey()) : it.getValue() ] }
   }
 
 
-  def getFitsFields (Fits refFits) {
-    log.trace("(FitsFileProcessor.getFitsFields): refFits=${refFits}")
+  def getFitsFields (Fits fits) {
+    log.trace("(FitsFileProcessor.getFitsFields): fits=${fits}")
     Map hdrMap = [:]
 
-    BasicHDU bhdu = refFits.getHDU(0)
-    Header hdr = bhdu.getHeader()
+    BasicHDU bhdu = fits.getHDU(0)
+    Header header = bhdu.getHeader()
     hdrMap = [
-      'NAXIS1'   : hdr.getIntValue('NAXIS1'), // FITS required keyword
-      'NAXIS2'   : hdr.getIntValue('NAXIS2'), // FITS required keyword
+      'NAXIS1'   : header.getIntValue('NAXIS1'), // FITS required keyword
+      'NAXIS2'   : header.getIntValue('NAXIS2'), // FITS required keyword
       'AUTHOR'   : bhdu.getAuthor(),
       'obs_creation_date' : bhdu.getCreationDate(),
       'EQUINOX'  : bhdu.getEquinox(),
@@ -268,6 +314,27 @@ class JwstProcessor implements IFitsFileProcessor {
 
 
   /**
+   * Log the given error message from the named method. Output the error to
+   * the standard error stream if the final argument is true (the default).
+   */
+  private logError (String fromWhere, String msg, boolean toSysErr=true) {
+    log.error("(${fromWhere}): ${msg}")
+    if (toSysErr)
+      System.err.println("ERROR: (${fromWhere}): ${msg}")
+  }
+
+  /**
+   * Log the given warning message from the named method. Output the warning to
+   * the standard error stream if the final argument is true (the default).
+   */
+  private logWarning (String fromWhere, String msg, boolean toSysErr=true) {
+    log.warn("(${fromWhere}): ${msg}")
+    if (toSysErr)
+      System.err.println("WARNING: (${fromWhere}): ${msg}")
+  }
+
+
+  /**
    * Open, read, and return a Fits object from the given File, which is assumed to be
    * pointing to a valid, readable FITS file.
    * Returns the new Fits object, or null if problems encountered.
@@ -283,9 +350,8 @@ class JwstProcessor implements IFitsFileProcessor {
       fits.read()                             // read the data into FITS object
     }
     catch (Exception iox) {
-      def msg = "Invalid FITS Header encountered in file '${aFile.getAbsolutePath()}'. File processing skipped."
-      log.warn("(JwstProcessor.readFitsFile): $msg")
-      System.err.println("WARNING: $msg")
+      def msg = "Invalid FITS Header encountered in file '${aFile.getAbsolutePath()}'. File skipped."
+      logError('JwstProcessor.readFitsFile', msg)
       return null                           // signal unable to open/read FITS file
     }
 
