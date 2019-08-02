@@ -10,7 +10,8 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Add stubs for data flow methods. Cleanups. Move notes to end of file.
+ *   Last Modified: Remove mutable class variables. Reload mutable fieldsInfo per FITS file.
+ *                  Refactor to add FITS header info directly to fieldsInfo. Cleanups.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -35,10 +36,10 @@ class JwstProcessor implements IFitsFileProcessor {
 
 
   /** Debug setting: when true, show internal information for debugging. */
-  boolean DEBUG   = false
+  private boolean DEBUG   = false
 
   /** Verbose setting: when true, show extra information about program operation. */
-  boolean VERBOSE = false
+  private boolean VERBOSE = false
 
   /** Configuration parameters given to this class in the constructor. */
   private Map config
@@ -50,28 +51,18 @@ class JwstProcessor implements IFitsFileProcessor {
       Read from a given external file or a default internal resource file. */
   private Map fitsAliases
 
-  /** Map defining header field information for fields processed by this processor.
-      Read from a given external file or a default internal resource file. */
-  private Map fitsFields
-
 
   /** Public constructor taking a map of configuration settings. */
   public JwstProcessor (configuration) {
     log.trace("(JwstProcessor.ctor): config=${configuration}")
-    this.config = configuration             // save incoming settings in global variable
-    this.DEBUG = configuration.DEBUG ?: false
-    this.VERBOSE = configuration.VERBOSE ?: false
+    config = configuration                  // save incoming settings in global variable
+    DEBUG = configuration.DEBUG ?: false
+    VERBOSE = configuration.VERBOSE ?: false
 
     // load the FITS field name aliases from a given file path or a default resource path.
     fitsAliases = loadAliases(config.aliasFile)
-    if (DEBUG)                              // REMOVE LATER
-      fitsAliases.each { entry -> println("${entry.key}=${entry.value}") }
-
-    // load the field information from a given file or a default resource path.
-    fitsFields = loadFields(config.fieldsFile)
-    if (DEBUG) {                              // REMOVE LATER
-      fitsFields.each { entry -> println("${entry.key}=${entry.value}") }
-    }
+    // if (DEBUG)                              // REMOVE LATER
+    //   fitsAliases.each { entry -> println("${entry.key}=${entry.value}") }
   }
 
 
@@ -83,16 +74,24 @@ class JwstProcessor implements IFitsFileProcessor {
     if (!fits)                              // if unable to open/read FITS file
       return 0                              // then skip this file
 
+    // Map defining information for fields processed by this processor.
+    // Loads the field information from a given file or a default resource path.
+    Map fieldsInfo = loadFieldsInfo(config.fieldsFile)
+
     Header header = fits.getHDU(0).getHeader() // get the header from the primary HDU
     Map headerFields = getHeaderFields(fits)   // get a map of all FITS headers and value strings
+    // if (DEBUG) {                               // REMOVE LATER
+    //   println("HDR FIELDS(${headerFields.size()}): ${headerFields}")
+    //   // headerFields.each { key, val -> println("${key}: ${val}") }
+    // }
 
-    if (DEBUG) {                               // REMOVE LATER
-      println("HDR FIELDS(${headerFields.size()}): ${headerFields}")
-      // headerFields.each { key, val -> println("${key}: ${val}") }
+    addInfoFromFitsHeaders(headerFields, fieldsInfo) // get FITS header field keys and values
+    addValuesForFields(fieldsInfo)          // fetch values from FITS file headers
+
+    if (DEBUG) {                            // REMOVE LATER
+      fieldsInfo.each { entry -> println("${entry.key}=${entry.value}") }
     }
 
-    Map fieldsInfo = fieldInfoForFitsHeaders(headerFields)
-    addValuesForFields(fieldsInfo)          // fetch values from FITS file headers
     computeValuesForFields(fieldsInfo)      // compute missing values
     addDefaultValuesForFields(fieldsInfo)   // add defaults for missing values, if possible
     ensureRequiredFields(fieldsInfo)        // check for all required fields
@@ -101,19 +100,53 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
   private void addDefaultValuesForFields (Map fieldsInfo) {
-    // TODO: IMPLEMENT LATER
-    // NOTE: default for t_exptime given by Eiichi Egami 20190626: 1347
-    // NOTE: default for instrument_name = NIRCam + MODULE value
-    // NOTE: Ask Eiichi about o_ucd: what is being measured? photo.flux.density? others?
+    log.trace("(JwstProcessor.addDefaultValuesForFields): fieldsInfo=${fieldsInfo}")
+    fieldsInfo.each { key, fieldInfo ->
+      // TODO:
+      // get the default value
+      // if (default value is not NO_DEFAULT_VALUE marker) {
+      //   convert default value to correct type
+      //   add value to fieldsInfo map
+      // }
+
+      // addDefaultValueForAField(fieldInfo)
+      // if (DEBUG)                                // REMOVE LATER
+      //   println("aDVFF: FIELDINFO=${fieldInfo}") // REMOVE LATER
+    }
   }
 
   private void computeValuesForFields (Map fieldsInfo) {
     // TODO: IMPLEMENT LATER
+    //   if value is computed: try keyword dispatch to calculation routine
+
+    // NOTE: substitute 1347.0 for 0.0 t_exptime value (from Eiichi Egami 20190626)
+    // NOTE: value for instrument_name = NIRCam + MODULE value
+    // NOTE: Ask Eiichi about o_ucd: what is being measured? photo.flux.density? others?
   }
 
   private void ensureRequiredFields (Map fieldsInfo) {
     // TODO: IMPLEMENT LATER
   }
+
+
+  /**
+   * For the given map of FITS file header fields, find the corresponding ObsCore keyword,
+   * if any, and lookup the field information for that key. If found, add the corresponding
+   * FITS file header keyword and value string.
+   */
+  private void addInfoFromFitsHeaders (Map headerFields, Map fieldsInfo) {
+    log.trace("(JwstProcessor.addInfoFromFitsHeaders): headerFields=${headerFields}")
+    headerFields.each { hdrKey, hdrValueStr ->
+      def obsCoreKey = getObsCoreKeyFromAlias(hdrKey) // map header key to ObsCore key
+      if (obsCoreKey) {                               // if found alias mapping
+        def fieldInfo = fieldsInfo[obsCoreKey]
+        if (fieldInfo) {                    // if we have this ObsCore field, add header info
+          fieldInfo << [ "hdrKey": hdrKey, "hdrValueStr": hdrValueStr ]
+        }
+      }
+    }
+  }
+
 
   /**
    * Try to fetch a value of the correct type for each field in the given field
@@ -123,8 +156,8 @@ class JwstProcessor implements IFitsFileProcessor {
     log.trace("(JwstProcessor.findValuesForFields): fieldsInfo=${fieldsInfo}")
     fieldsInfo.each { key, fieldInfo ->
       addValueForAField(fieldInfo)
-      if (DEBUG)                                // REMOVE LATER
-        println("aVFF: FIELDINFO=${fieldInfo}") // REMOVE LATER
+      // if (DEBUG)                                // REMOVE LATER
+      //   println("aVFF: FIELDINFO=${fieldInfo}") // REMOVE LATER
     }
   }
 
@@ -174,26 +207,6 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
 
-  /**
-   * For the given map of FITS file header fields, find the corresponding ObsCore keyword,
-   * if any, and lookup the field information for that key. Returns a (possibly empty)
-   * map of ObsCore keyword to field information map, augmented with the header field info.
-   */
-  private Map fieldInfoForFitsHeaders (Map headerFields) {
-    log.trace("(JwstProcessor.fieldInfoForFitsHeaders): headerFields=${headerFields}")
-    Map fieldInfoMap = [:]
-    headerFields.each { hdrKey, hdrValueStr ->
-      def obsCoreKey = getObsCoreKeyFromAlias(hdrKey) // map header key to ObsCore key
-      if (obsCoreKey) {                               // if found alias mapping
-        def fieldInfo = getObsCoreFieldInfo(obsCoreKey, hdrKey, hdrValueStr)
-        if (fieldInfo) {                      // if we have info for this ObsCore field process it
-          fieldInfoMap << [ (obsCoreKey): fieldInfo ]
-        }
-      }
-    }
-    return fieldInfoMap
-  }
-
   // def getFitsFields (Fits fits) {
   //   log.trace("(JwstProcessor.getFitsFields): fits=${fits}")
   //   Map hdrMap = [:]
@@ -236,25 +249,6 @@ class JwstProcessor implements IFitsFileProcessor {
     Header header = fits.getHDU(0).getHeader()
     return header.iterator().findAll{it.isKeyValuePair()}.collectEntries {
       [ (it.getKey()) : it.getValue() ] }
-  }
-
-  /**
-   * Return a field information map for the given ObsCore keyword, or null if none found.
-   * If the optional FITS header keyword and/or head value string is given, they will be
-   * added to retrieved information map (if any).
-   */
-  private Map getObsCoreFieldInfo (String obsCoreKey, String hdrKey=null, String hdrValueStr=null) {
-    log.trace("(JwstProcessor.getObsCoreFieldInfo): obsCoreKey=${obsCoreKey}, hdrKey=${hdrKey}")
-    def infoMap = null
-    def info = fitsFields.get(obsCoreKey)
-    if (info && (info.size() == fieldInfoColumnNames.size())) {
-      infoMap = [fieldInfoColumnNames, info].transpose().collectEntries()
-      if (hdrKey)
-        infoMap << [ "hdrKey": hdrKey ]
-      if (hdrValueStr)
-        infoMap << [ "hdrValueStr": hdrValueStr ]
-    }
-    return infoMap
   }
 
   /** Return the ObsCore keyword for the given FITS header keyword, or null if none found. */
@@ -306,9 +300,13 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
 
-  /** Locate the fields info file, load the fields, and return them. */
-  private Map loadFields (File fieldsFile) {
-    log.trace("(JwstProcessor.loadFields): fieldsFile=${fieldsFile}")
+  /**
+   * Read the file containing information about the fields processed by this program,
+   * and return the fields in a map. Loads the field information from the given file
+   * or a default resource path, if no file given.
+   */
+  private Map loadFieldsInfo (File fieldsFile=null) {
+    log.trace("(JwstProcessor.loadFieldsInfo): fieldsFile=${fieldsFile}")
     def recCnt = 0
     def fields = [:]
     def fieldStream
@@ -322,7 +320,9 @@ class JwstProcessor implements IFitsFileProcessor {
       fieldStream = this.getClass().getResourceAsStream(DEFAULT_FIELDS_FILEPATH);
 
     if (VERBOSE)
-      log.info("(JwstProcessor.loadFields): Reading field information from: ${fieldsFilepath}")
+      log.info("(JwstProcessor.loadFieldsInfo): Reading field information from: ${fieldsFilepath}")
+
+    def numInfoFields = fieldInfoColumnNames.size() // to avoid recomputation in loop
 
     def inSR = new InputStreamReader(fieldStream, 'UTF8')
     inSR.eachLine { line ->
@@ -337,15 +337,16 @@ class JwstProcessor implements IFitsFileProcessor {
       }
       else {                                // assume line is a data line
         def flds = line.split(',').collect{it.trim()}
-        if (flds.size() > 1) {              // must be at least two fields
-          fields.put(flds[0], flds)         // store all fields keyed by first field
+        if (flds && (flds.size() == numInfoFields)) {
+          def infoMap = [fieldInfoColumnNames, flds].transpose().collectEntries()
+          fields.put(flds[0], infoMap)      // store all fields keyed by first field
           recCnt += 1
         }
       }
     }
 
     if (VERBOSE)
-      log.info("(JwstProcessor.loadFields): Read ${recCnt} field information records.")
+      log.info("(JwstProcessor.loadFieldsInfo): Read ${recCnt} field information records.")
 
     return fields
   }
@@ -407,14 +408,4 @@ class JwstProcessor implements IFitsFileProcessor {
 //   if value missing: try to get the default value
 //   if value is computed: try dispatch to calculation routine
 //   if value still missing?: fill in null?
-// }
-
-// def fitsFields = getFitsFields(fits)
-// println("FITS FIELDS(${fitsFields.size()}): ${fitsFields}")
-// fitsFields.each { key, val -> println("${key}: ${val}") }
-
-// def allFields = getHeaderFields(fits)
-// if (DEBUG) {                            // REMOVE LATER
-//   println("ALL FIELDS(${allFields.size()}): ${allFields}")
-//   allFields.each { key, val -> println("${key}: ${val}") }
 // }
