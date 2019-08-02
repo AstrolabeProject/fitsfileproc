@@ -5,9 +5,6 @@
 #     datatype   = field data type (double, integer, string)
 #     required   = true if field is required, false if optional
 #     default    = default value for an unspecified field (* = set by program or no default)
-#
-# This first data line contains the column names for this file and is required:
-_COLUMN_NAMES_, obsCoreKey, datatype, required, default
 
 
 # Mandatory ObsCore Data Model fields

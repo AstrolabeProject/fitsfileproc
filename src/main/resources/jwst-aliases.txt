@@ -3,9 +3,6 @@
 #   where:
 #     fitsKey    = common or specialized FITS keyword
 #     obsCoreKey = ObsCore equivalent or custom keyword
-#
-# This first data line contains the column names for this file (currently not used by program):
-_COLUMN_NAMES_, fitsKey, obsCoreKey
 
 
 #
@@ -59,7 +56,7 @@ _NOP_   , em_res_power
 #
 _NOP_   , t_xel
 # for JWST, DATE is the FITS timestamp (GMT):
-DATE    , t_min
+# DATE    , t_min
 DATE-BEG, t_min
 # for JWST, DATE-OBS is date only, no time
 # DATE-OBS, t_min
