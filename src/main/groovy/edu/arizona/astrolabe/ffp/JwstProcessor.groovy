@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Add initial required fields check.
+ *   Last Modified: Begin calculated values: do a few easy ones.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -222,16 +222,21 @@ class JwstProcessor implements IFitsFileProcessor {
    * field maps which does not already have a value.
    */
   private void computeValuesForFields (Map fieldsInfo) {
-    // TODO: IMPLEMENT LATER - try keyword dispatch to calculation routine
     log.trace("(JwstProcessor.computeValuesForFields): fieldsInfo=${fieldsInfo}")
+
+    /////////////////////////////////////////////////////////////////////
+    // NOTE: SPECIAL CASE: correct the zero value with a default of 1347.0
+    //       REMOVE if the t_exptime field gets real values.
+    def tExptime = getValueFor('t_exptime', fieldsInfo)
+    if (tExptime == 0.0)
+      fieldsInfo['t_exptime']['value'] = 1347.0 as Double // value per Eiichi Egami 20190626
+    /////////////////////////////////////////////////////////////////////
+
     fieldsInfo.each { key, fieldInfo ->
       if (!hasValue(fieldInfo)) {           // do not replace existing values
-        computeValueForAField(fieldInfo)
+        computeValueForAField(fieldInfo, fieldsInfo)
       }
     }
-    // NOTE: substitute 1347.0 for 0.0 t_exptime value (from Eiichi Egami 20190626)
-    // NOTE: value for instrument_name = NIRCam + MODULE value
-    // NOTE: Ask Eiichi about o_ucd: what is being measured? photo.flux.density? others?
   }
 
   /**
@@ -239,11 +244,23 @@ class JwstProcessor implements IFitsFileProcessor {
    * map which does not already have a value. If successful, the value is added back
    * to the field information.
    */
-  private void computeValueForAField (Map fieldInfo) {
-    log.trace("(JwstProcessor.computeValueForAField): fieldInfo=${fieldInfo}")
+  private void computeValueForAField (Map fieldInfo, Map fieldsInfo) {
+    // log.trace("(JwstProcessor.computeValueForAField): fieldInfo=${fieldInfo}, fieldsInfo=${fieldsInfo}")
+    log.info("(JwstProcessor.computeValueForAField): fieldInfo=${fieldInfo}") // REMOVE LATER
     if (hasValue(fieldInfo))                // do not replace existing values
       return                                // exit out now
-    // TODO: IMPLEMENT LATER
+
+    def obsCoreKey = fieldInfo['obsCoreKey']
+    switch(obsCoreKey) {
+      case 'instrument_name':               // NIRCam + MODULE value
+        def module = getValueFor('nircam_module', fieldsInfo)
+        fieldInfo['value'] = (module != null) ? "NIRCam-${module}" : "NIRCam"
+        break
+      case 'o_ucd':
+        // NOTE: Ask Eiichi about o_ucd: what is being measured? photo.flux.density? others?
+        fieldInfo['value'] = 'photo.flux'   // TODO: LATER check with Eiichi
+        break
+    }
   }
 
 
@@ -309,6 +326,15 @@ class JwstProcessor implements IFitsFileProcessor {
   private String getObsCoreKeyFromAlias (hdrKey) {
     log.trace("(JwstProcessor.getObsCoreKeyFromAlias): hdrKey=${hdrKey}")
     return fitsAliases.get(hdrKey)
+  }
+
+  /**
+   * Return the current value for the named field in the given fields map, or null if
+   *  the named field is not present or if it does not have a current value.
+   */
+  private def getValueFor (String whichField, Map fieldsInfo) {
+    def fld = fieldsInfo.get(whichField)
+    return ((fld != null) ? fld.get('value') : null)
   }
 
   /** Return true if the given field info map has a data value, else return false. */
