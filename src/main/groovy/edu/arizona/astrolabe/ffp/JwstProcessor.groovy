@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Refactor value conversion. Add default values. Add stubs for compute values.
+ *   Last Modified: Add initial required fields check.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -248,7 +248,16 @@ class JwstProcessor implements IFitsFileProcessor {
 
 
   private void ensureRequiredFields (Map fieldsInfo) {
+    log.trace("(JwstProcessor.ensureRequiredFields): fieldsInfo=${fieldsInfo}")
     // TODO: IMPLEMENT LATER
+    fieldsInfo.each { key, fieldInfo ->
+      if (!hasValue(fieldInfo)) {           // find fields which still have no value
+        def obsCoreKey = fieldInfo['obsCoreKey']
+        def reqFld = fieldInfo['required'] ? 'Required' : 'Optional'
+        def msg = "${reqFld} field '${obsCoreKey}' still does not have a value."
+        logWarning('JwstProcessor.ensureRequiredFields', msg, false)
+      }
+    }
   }
 
 
