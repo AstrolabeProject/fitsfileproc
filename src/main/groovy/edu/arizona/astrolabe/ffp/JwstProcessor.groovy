@@ -10,8 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Remove mutable class variables. Reload mutable fieldsInfo per FITS file.
- *                  Refactor to add FITS header info directly to fieldsInfo. Cleanups.
+ *   Last Modified: Refactor value conversion. Add default values. Add stubs for compute values.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -22,7 +21,7 @@ class JwstProcessor implements IFitsFileProcessor {
   /** String which defines the line containing column_names in the JWST resource files. */
   static final String COLUMN_NAME_MARKER = '_COLUMN_NAMES_'
 
-  /** String which marks a field with no default value or a value to be calculated. */
+  /** String which marks a field with "no default value" or a value to be calculated. */
   static final String NO_DEFAULT_VALUE = '*'
 
   /** String which defines a "not yet implemented" line in the JWST resource files. */
@@ -87,45 +86,69 @@ class JwstProcessor implements IFitsFileProcessor {
 
     addInfoFromFitsHeaders(headerFields, fieldsInfo) // get FITS header field keys and values
     addValuesForFields(fieldsInfo)          // fetch values from FITS file headers
+    addDefaultValuesForFields(fieldsInfo)   // add defaults for missing values, if possible
+    computeValuesForFields(fieldsInfo)      // try to compute values still missing
 
     if (DEBUG) {                            // REMOVE LATER
       fieldsInfo.each { entry -> println("${entry.key}=${entry.value}") }
     }
 
-    computeValuesForFields(fieldsInfo)      // compute missing values
-    addDefaultValuesForFields(fieldsInfo)   // add defaults for missing values, if possible
     ensureRequiredFields(fieldsInfo)        // check for all required fields
 
     return 1                                // successfully processed one more file
   }
 
+
+  /**
+   * Try to instantiate a default value of the correct type for each field in the given
+   * fields map which does not already have a value.
+   */
   private void addDefaultValuesForFields (Map fieldsInfo) {
     log.trace("(JwstProcessor.addDefaultValuesForFields): fieldsInfo=${fieldsInfo}")
     fieldsInfo.each { key, fieldInfo ->
-      // TODO:
-      // get the default value
-      // if (default value is not NO_DEFAULT_VALUE marker) {
-      //   convert default value to correct type
-      //   add value to fieldsInfo map
-      // }
-
-      // addDefaultValueForAField(fieldInfo)
-      // if (DEBUG)                                // REMOVE LATER
-      //   println("aDVFF: FIELDINFO=${fieldInfo}") // REMOVE LATER
+      if (!hasValue(fieldInfo)) {           // do not replace existing values
+        addDefaultValueForAField(fieldInfo)
+      }
     }
   }
 
-  private void computeValuesForFields (Map fieldsInfo) {
-    // TODO: IMPLEMENT LATER
-    //   if value is computed: try keyword dispatch to calculation routine
+  /**
+   * Try to instantiate a default value of the correct type for the given field
+   * information map which does not already have a value. If found, the value is
+   * added back to the field information. Ignores field information maps which
+   * have a "no default value" marker.
+   */
+  private void addDefaultValueForAField (Map fieldInfo) {
+    log.trace("(JwstProcessor.addDefaultValueForAField): fieldInfo=${fieldInfo}")
+    if (hasValue(fieldInfo))                // do not replace existing values
+      return                                // exit out now
 
-    // NOTE: substitute 1347.0 for 0.0 t_exptime value (from Eiichi Egami 20190626)
-    // NOTE: value for instrument_name = NIRCam + MODULE value
-    // NOTE: Ask Eiichi about o_ucd: what is being measured? photo.flux.density? others?
-  }
+    def defaultStr = fieldInfo['default']   // get default string value
+    def datatype = fieldInfo['datatype']    // data type for the value
+    if ( (defaultStr == null) ||            // sanity check: need at least value and datatype
+         !datatype ||
+         (defaultStr == NO_DEFAULT_VALUE) ) // ignore fields with a "no default value" marker
+      return                                // exit out now
 
-  private void ensureRequiredFields (Map fieldsInfo) {
-    // TODO: IMPLEMENT LATER
+    def value = null                        // variable for extracted value
+    try {
+      value = stringToValue(defaultStr, datatype) // extract value of given type
+    }
+    catch (IllegalArgumentException iax) {
+      def obsCoreKey = fieldInfo['obsCoreKey']
+      def msg = "Unknown datatype '${datatype}' for field '${obsCoreKey}'. Field value not set."
+      logError('JwstProcessor.addDefaultValueForAField', msg)
+      value = null
+    }
+    catch (NumberFormatException nfe) {
+      def obsCoreKey = fieldInfo['obsCoreKey']
+      def msg = "Unable to convert default value '${defaultStr}' for field '${obsCoreKey}' to '${datatype}'. Field value not set."
+      logError('JwstProcessor.addDefaultValueForAField', msg)
+      value = null
+    }
+
+    if (value != null)                      // if we extracted a value
+      fieldInfo['value'] = value            // then save extracted value in the field info map
   }
 
 
@@ -147,10 +170,9 @@ class JwstProcessor implements IFitsFileProcessor {
     }
   }
 
-
   /**
-   * Try to fetch a value of the correct type for each field in the given field
-   * information map. If found, the field value is added back to the field information.
+   * Try to fetch a value of the correct type for each field in the given fields map.
+   * If found, a field value is added back to the corresponding field information.
    */
   private void addValuesForFields (Map fieldsInfo) {
     log.trace("(JwstProcessor.findValuesForFields): fieldsInfo=${fieldsInfo}")
@@ -162,48 +184,71 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
   /**
-   * Get a value for the field with the given field information. Try to convert
-   * the header value string to the proper datatype.
+   * Try to create a value of the correct type for the given field information map.
+   * Tries to convert the header value string to the proper datatype. If successful,
+   * the value is added back to the field information.
    */
-  private boolean addValueForAField (Map fieldInfo) {
+  private void addValueForAField (Map fieldInfo) {
     log.trace("(JwstProcessor.addValueForAField): fieldInfo=${fieldInfo}")
 
-    def value = null                        // return variable for extracted value
     def valueStr = fieldInfo['hdrValueStr'] // string value for header keyword
     def datatype = fieldInfo['datatype']    // data type for the value
     if ((valueStr == null) || !datatype)    // sanity check: need at least value and datatype
-      return false                          // exit out now
+      return                                // exit out now
 
+    def value = null                        // variable for extracted value
     try {
-      switch (datatype) {                   // dispatch conversions on the datatype
-        case 'integer':
-          value = valueStr as Integer
-          break
-        case 'double':
-          value = valueStr as Double
-          break
-        case 'string':
-          value = valueStr
-          break
-        default:
-          def fitsKey = fieldInfo['hdrKey']       // header key from FITS file
-          def msg = "Unknown datatype '${datatype}' for field '${fitsKey}'. Ignoring bad field value."
-          logError('JwstProcessor.addValueForAField', msg)
-          value = null
-          break
-      }
-    } catch (NumberFormatException nfe) {
-      def fitsKey = fieldInfo['hdrKey']       // header key from FITS file
+      value = stringToValue(valueStr, datatype) // extract value of given type
+    }
+    catch (IllegalArgumentException iax) {
+      def msg = "Unknown datatype '${datatype}' for field '${fitsKey}'. Ignoring bad field value."
+      logError('JwstProcessor.addValueForAField', msg)
+      value = null
+    }
+    catch (NumberFormatException nfe) {
+      def fitsKey = fieldInfo['hdrKey']     // header key from FITS file
       def msg = "Unable to convert value '${valueStr}' for field '${fitsKey}' to '${datatype}'. Ignoring bad field value."
       logError('JwstProcessor.addValueForAField', msg)
       value = null
     }
 
-    if (value != null) {                    // if we extracted a value
+    if (value != null)                      // if we extracted a value
       fieldInfo['value'] = value            // then save extracted value in the field info map
-      return true                           // signal success
+  }
+
+
+  /**
+   * Try to compute a value of the correct type for each field in the given
+   * field maps which does not already have a value.
+   */
+  private void computeValuesForFields (Map fieldsInfo) {
+    // TODO: IMPLEMENT LATER - try keyword dispatch to calculation routine
+    log.trace("(JwstProcessor.computeValuesForFields): fieldsInfo=${fieldsInfo}")
+    fieldsInfo.each { key, fieldInfo ->
+      if (!hasValue(fieldInfo)) {           // do not replace existing values
+        computeValueForAField(fieldInfo)
+      }
     }
-    return false                            // else some problem: signal failure
+    // NOTE: substitute 1347.0 for 0.0 t_exptime value (from Eiichi Egami 20190626)
+    // NOTE: value for instrument_name = NIRCam + MODULE value
+    // NOTE: Ask Eiichi about o_ucd: what is being measured? photo.flux.density? others?
+  }
+
+  /**
+   * Try to compute a value of the correct type for the given field information
+   * map which does not already have a value. If successful, the value is added back
+   * to the field information.
+   */
+  private void computeValueForAField (Map fieldInfo) {
+    log.trace("(JwstProcessor.computeValueForAField): fieldInfo=${fieldInfo}")
+    if (hasValue(fieldInfo))                // do not replace existing values
+      return                                // exit out now
+    // TODO: IMPLEMENT LATER
+  }
+
+
+  private void ensureRequiredFields (Map fieldsInfo) {
+    // TODO: IMPLEMENT LATER
   }
 
 
@@ -257,6 +302,10 @@ class JwstProcessor implements IFitsFileProcessor {
     return fitsAliases.get(hdrKey)
   }
 
+  /** Return true if the given field info map has a data value, else return false. */
+  private boolean hasValue (Map fieldInfo) {
+    return (fieldInfo['value'] != null)
+  }
 
   /** Locate the aliases file, load the aliases, and return them. */
   private Map loadAliases (File aliasFile) {
@@ -398,14 +447,33 @@ class JwstProcessor implements IFitsFileProcessor {
     return fits                             // everything OK: return Fits object
   }
 
-}
 
-// TODO:
-// for all keys read {
-//   map key to ObsCore name
-//   get datatype from ObsCore key in fields map
-//   read value of datatype using original key
-//   if value missing: try to get the default value
-//   if value is computed: try dispatch to calculation routine
-//   if value still missing?: fill in null?
-// }
+  /**
+   * Convert the given string value to the given datatype. Allowed datatype values
+   * are limited: "date", "double", "integer", "string".
+   */
+  private def stringToValue (String valueStr, String datatype) {
+    if ((valueStr == null) || !datatype)    // sanity check: need at least value and datatype
+      return null                           // exit out now
+
+    def value = null                        // return variable for extracted value
+    try {                                   // dispatch conversions on the datatype
+      if (datatype == 'integer')
+        value = valueStr as Integer
+      else if (datatype == 'double')
+        value = valueStr as Double
+      else if (datatype == 'string')
+        value = valueStr
+      else if (datatype == 'date')
+        value = new FitsDate(valueStr)      // FITS date = ISO-8601 w/o the trailing Z
+      else {
+        throw new IllegalArgumentException(
+          "Unknown datatype '${datatype}' specified for conversion.")
+      }
+    } catch (NumberFormatException nfe) {
+      throw new NumberFormatException(
+        "Unable to convert value '${valueStr}' to '${datatype}'.")
+    }
+  }
+
+}
