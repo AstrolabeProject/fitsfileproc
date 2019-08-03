@@ -91,3 +91,6 @@ nircam_module, string, false, A
 filter, string, false, *
 pupil, string, false, CLEAR
 read_pattern, string, false, DEEP8
+
+# for JWST, DATE is the FITS timestamp (GMT):
+jwst_date, date, false, *
