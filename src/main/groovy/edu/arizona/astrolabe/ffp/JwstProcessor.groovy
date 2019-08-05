@@ -290,13 +290,14 @@ class JwstProcessor implements IFitsFileProcessor {
 
   private void ensureRequiredFields (Map fieldsInfo) {
     log.trace("(JwstProcessor.ensureRequiredFields): fieldsInfo=${fieldsInfo}")
-    // TODO: IMPLEMENT LATER
+    // TODO: IMPLEMENT MORE LATER?
     fieldsInfo.each { key, fieldInfo ->
       if (!hasValue(fieldInfo)) {           // find fields which still have no value
         def obsCoreKey = fieldInfo['obsCoreKey']
         def reqFld = fieldInfo['required'] ? 'Required' : 'Optional'
         def msg = "${reqFld} field '${obsCoreKey}' still does not have a value."
-        logWarning('JwstProcessor.ensureRequiredFields', msg, false)
+        if (VERBOSE || DEBUG)
+          logWarning('JwstProcessor.ensureRequiredFields', msg, false)
       }
     }
   }

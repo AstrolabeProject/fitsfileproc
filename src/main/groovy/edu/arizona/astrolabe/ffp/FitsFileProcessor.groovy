@@ -13,12 +13,13 @@ import groovy.transform.InheritConstructors
  *   This class parses and validates its arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Add AbortFileProcessingException.
+ *   Last Modified: Add InformationOutputter interface and output format argument. Redo info-file argument.
  */
 class FitsFileProcessor {
 
   static final Logger log = LogManager.getLogger(FitsFileProcessor.class.getName());
   static final List FILE_TYPES = ['.fits', '.fits.gz']
+  static final List OUTPUT_FORMATS = ['db', 'json', 'sql']
 
   static boolean DEBUG   = false
   static boolean VERBOSE = false
@@ -27,20 +28,22 @@ class FitsFileProcessor {
   public static void main (String[] args) {
 
     // read, parse, and validate command line arguments
-    def usage = 'java -jar ffp.jar [-h] [-a aliases] [-f fields] [-t processor-type] (FITS-file|FITS-directory)..'
+    def usage = 'java -jar ffp.jar [-h] [-a aliases-file] [-f output-format] [-i info-file] [-t processor-type] (FITS-file|FITS-directory)..'
     def cli = new CliBuilder(usage: usage)
     cli.width = 100                         // increase usage message width
     cli.with {
-      a(longOpt:  'aliases',   args:1, argName: 'aliases',
-        'File containing custom FITS header field name aliases (default "jwst-aliases")')
-      h(longOpt:  'help',     'Show usage information.')
-      d(longOpt:  'debug',
-        'Print debugging output in addition to normal processing (default false)')
-      f(longOpt:  'fields',   args:1, argName: 'fields',
-        'File containing custom FITS header field information (default "jwst-fields").')
-      t(longOpt:  'type',      args:1, argName: 'procType',
-        'Which processor type to use (default: "jwst")')
-      v(longOpt:  'verbose',  'Run in verbose mode (default: non verbose mode).')
+      a(longOpt:  'aliases', args:1, argName: 'filepath',
+        'File of aliases (FITS keyword to ObsCore keyword mappings) [default: "jwst-aliases"]')
+      d(longOpt: 'debug',
+        'Print debugging output in addition to normal processing [default: non debug mode]')
+      f(longOpt: 'format',  args:1, argName: 'output-format',
+        'Output format for processing results: "db", "json", or "sql" [default: "sql"]')
+      h(longOpt: 'help',     'Show usage information.')
+      i(longOpt: 'info',    args:1, argName: 'filepath',
+        'File listing information on fields to be processed [default: "jwst-fields"].')
+      t(longOpt: 'type',    args:1, argName: 'processor-type',
+        'Which processor type to use [default: "jwst"]')
+      v(longOpt: 'verbose',  'Run in verbose mode [default: non verbose mode].')
     }
     def options = cli.parse(args)           // parse command line
 
@@ -55,14 +58,22 @@ class FitsFileProcessor {
     this.VERBOSE = options.v ?: false
     this.DEBUG = options.d ?: false
 
+    // check for valid output format specification
+    String outputFormat = (options.f ?: 'sql').toLowerCase()
+    if (!OUTPUT_FORMATS.contains(outputFormat)) {
+      System.err.println("ERROR: Output format argument must be one of: ${OUTPUT_FORMATS.join(', ')}")
+      cli.usage()
+      System.exit(2)
+    }
+
     // if an external aliases filepath is given, check that it exists and is readable
     File aliasFile = validateAliasesFilepath(options.a ?: null)
 
-    // if an external fields info filepath is given, check that it exists and is readable
-    File fieldsFile = validateFieldsFilepath(options.f ?: null)
+    // if an external fields information filepath is given, check that it exists and is readable
+    File fieldsFile = validateFieldsFilepath(options.i ?: null)
 
     // instantiate a specialized processor with the specified settings
-    def settings = [ 'DEBUG': DEBUG, 'VERBOSE': VERBOSE ]
+    def settings = [ 'DEBUG': DEBUG, 'VERBOSE': VERBOSE, 'outputFormat': outputFormat ]
     if (aliasFile)
       settings << [ 'aliasFile': aliasFile ]
     if (fieldsFile)
@@ -76,8 +87,9 @@ class FitsFileProcessor {
     }
     else {
       System.err.println(
-        "Error: Processor type 'jwst' is currently the only type available. Exiting...")
-      System.exit(2)
+        "ERROR: Processor type 'jwst' is currently the only processor type available. Exiting...")
+      cli.usage()
+      System.exit(3)
     }
 
     // check the given input paths for validity
@@ -88,8 +100,8 @@ class FitsFileProcessor {
     pathList.each { path ->
       if (! path instanceof java.io.File) {
         System.err.println(
-          "Error: Found validated path '${path}' which is neither a file nor a directory. Exiting...")
-        System.exit(3)
+          "ERROR: Found validated path '${path}' which is neither a file nor a directory. Exiting...")
+        System.exit(4)
       }
       if (path.isDirectory()) {
         if (VERBOSE)
@@ -173,7 +185,7 @@ class FitsFileProcessor {
       aliasFile = FileUtils.goodFilePath(filepath)
       if (!aliasFile) {
         System.err.println(
-          "Error: Unable to find and read the specified aliases file '${filepath}'. Exiting...")
+          "ERROR: Unable to find and read the specified aliases file '${filepath}'. Exiting...")
         System.exit(10)
       }
     }
@@ -195,7 +207,7 @@ class FitsFileProcessor {
       fieldsFile = FileUtils.goodFilePath(filepath)
       if (!fieldsFile) {
         System.err.println(
-          "Error: Unable to find and read the specified fields info file '${filepath}'. Exiting...")
+          "ERROR: Unable to find and read the specified fields info file '${filepath}'. Exiting...")
         System.exit(11)
       }
     }
@@ -225,6 +237,21 @@ interface IFitsFileProcessor {
 
   /** Do any needed processor instance cleanup. */
   // void exit()
+}
+
+
+/**
+ * Interface specifying behavior for classes which output information derived from FITS files.
+ */
+interface IInformationOutputter {
+  /** Load the given field information directly into a PostgreSQL database. */
+  void intoPostgres (Map fieldsInfo);
+
+  /** Output the given field information to standard output as a loadable SQL script. */
+  void toSQL (Map fieldsInfo);
+
+  /** Output the given field information to standard output as a JSON string. */
+  void toJSON (Map fieldsInfo);
 }
 
 
