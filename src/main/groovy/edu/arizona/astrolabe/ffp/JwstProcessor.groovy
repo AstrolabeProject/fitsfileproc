@@ -10,7 +10,8 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Calculate estimated size field.
+ *   Last Modified: Add file info directly to fields information and redo some methods to use it.
+ *                  Instantiate an information outputter and call it.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -50,6 +51,9 @@ class JwstProcessor implements IFitsFileProcessor {
       Read from a given external file or a default internal resource file. */
   private Map fitsAliases
 
+  /** An instance of IInformationOutputter for outputting the processed information. */
+  private IInformationOutputter infoOutputter
+
 
   /** Public constructor taking a map of configuration settings. */
   public JwstProcessor (configuration) {
@@ -62,6 +66,7 @@ class JwstProcessor implements IFitsFileProcessor {
     fitsAliases = loadAliases(config.aliasFile)
     // if (DEBUG)                              // REMOVE LATER
     //   fitsAliases.each { entry -> println("${entry.key}=${entry.value}") }
+    infoOutputter = new InformationOutputter(configuration)
   }
 
 
@@ -85,6 +90,9 @@ class JwstProcessor implements IFitsFileProcessor {
     // }
 
     try {
+      // add information about the input file that is being processed
+      addFileInformation(aFile, fieldsInfo)
+
       // add header field keys and string values from the FITS file
       addInfoFromFitsHeaders(headerFields, fieldsInfo)
 
@@ -95,13 +103,16 @@ class JwstProcessor implements IFitsFileProcessor {
       addDefaultValuesForFields(fieldsInfo)
 
       // try to compute values for computable fields which are still missing values
-      computeValuesForFields(aFile, headerFields, fieldsInfo)
+      computeValuesForFields(headerFields, fieldsInfo)
       if (DEBUG) {                          // REMOVE LATER
         fieldsInfo.each { entry -> println("${entry.key}=${entry.value}") }
       }
 
       // do some checks for required fields
       ensureRequiredFields(fieldsInfo)
+
+      // output the extracted field information
+      infoOutputter.outputInformation(fieldsInfo)
     }
     catch (AbortFileProcessingException afpx) {
       def msg =
@@ -166,6 +177,19 @@ class JwstProcessor implements IFitsFileProcessor {
       fieldInfo['value'] = value            // then save extracted value in the field info map
   }
 
+
+  /**
+   * Add information about the given input file to the field information map keyed with
+   * a special keyword that is shared with other modules.
+   */
+  private void addFileInformation (File aFile, Map fieldsInfo) {
+    log.trace("(JwstProcessor.addFileInformation): aFile=${aFile}, fieldsInfo=${fieldsInfo}")
+    def fileInfoKey = IInformationOutputter.FILE_INFO_KEYWORD
+    def fileInfoMap =[ 'fileName': aFile.getName(),
+                       'filePath': aFile.getAbsolutePath(),
+                       'fileSize': aFile.length() ]
+    fieldsInfo[fileInfoKey] = fileInfoMap
+  }
 
   /**
    * For the given map of FITS file header fields, find the corresponding ObsCore keyword,
@@ -236,8 +260,8 @@ class JwstProcessor implements IFitsFileProcessor {
    * Try to compute a value of the correct type for each field in the given
    * field maps which does not already have a value.
    */
-  private void computeValuesForFields (File aFile, Map headerFields, Map fieldsInfo) {
-    log.trace("(JwstProcessor.computeValuesForFields): fieldsInfo=${fieldsInfo}")
+  private void computeValuesForFields (Map headerFields, Map fieldsInfo) {
+    log.trace("(JwstProcessor.computeValuesForFields): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
 
     ////////////////////////////////////////////////////////////////////////////////
     // NOTE: SPECIAL CASE: correct the t_exptime zero value
@@ -250,7 +274,7 @@ class JwstProcessor implements IFitsFileProcessor {
 
     fieldsInfo.each { key, fieldInfo ->
       if (!hasValue(fieldInfo)) {           // do not replace existing values
-        computeValueForAField(fieldInfo, aFile, headerFields, fieldsInfo)
+        computeValueForAField(fieldInfo, headerFields, fieldsInfo)
       }
     }
   }
@@ -261,9 +285,9 @@ class JwstProcessor implements IFitsFileProcessor {
    * to the field information. The map containing all fields is also passed to this method
    * to enable calculations based on the values of other fields.
    */
-  private void computeValueForAField (Map fieldInfo, File aFile, Map headerFields, Map fieldsInfo) {
+  private void computeValueForAField (Map fieldInfo, Map headerFields, Map fieldsInfo) {
     log.trace(
-      "(JwstProcessor.computeValueForAField): fI=${fieldInfo}, aF=${aFile}, hF=${headerFields}, fsI=${fieldsInfo}")
+      "(JwstProcessor.computeValueForAField): fI=${fieldInfo}, hF=${headerFields}, fsI=${fieldsInfo}")
 
     if (hasValue(fieldInfo))                // do not replace existing values
       return                                // exit out now
@@ -274,7 +298,9 @@ class JwstProcessor implements IFitsFileProcessor {
         handleWcsCoords(headerFields, fieldsInfo)
         break
       case 'access_estsize':                // estimated size is the size of the file
-        fieldInfo['value'] = aFile.length()
+        def fileInfo = fieldsInfo[IInformationOutputter.FILE_INFO_KEYWORD]
+        if (fileInfo && fileInfo['fileSize'])
+          fieldInfo['value'] = fileInfo['fileSize']
         break
       case 'instrument_name':               // NIRCam + MODULE value
         def module = getValueFor('nircam_module', fieldsInfo)
