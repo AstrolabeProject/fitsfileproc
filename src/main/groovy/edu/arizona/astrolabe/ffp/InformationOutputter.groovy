@@ -7,13 +7,11 @@ import org.apache.logging.log4j.*
  * Class to implement general output methods for the Astrolabe FITS File Processor project.
  *
  *   Written by: Tom Hicks. 8/5/2019.
- *   Last Modified: Initial creation.
+ *   Last Modified: Move file info keyword constant to the IInformationOutputter interface.
+ *                  Demote and re-type to* methods. Stub out new output information method.
  */
 class InformationOutputter implements IInformationOutputter {
   static final Logger log = LogManager.getLogger(InformationOutputter.class.getName());
-
-  /** The special keyword for input file information in the field information map. */
-  static final String FILE_INFO_KEYWORD = '_FILE_INFO_'
 
   /** String which defines a comment line in the SQL output. */
   private static final String SQL_COMMENT = '--'
@@ -44,31 +42,44 @@ class InformationOutputter implements IInformationOutputter {
     outputFormat = configuration?.outputFormat
   }
 
+  /** Output the given field information using the current output settings. */
+  void outputInformation (Map fieldsInfo) {
+    println(outputFileInfo(fieldsInfo))
+  }
 
   /** Load the given field information directly into a PostgreSQL database. */
   void intoPostgres (Map fieldsInfo) {
   }
 
-  /** Output the given field information to standard output as a loadable SQL script. */
-  void toSQL (Map fieldsInfo) {
-    outputFileInfo(fieldsInfo)
-  }
 
-  /** Output the given field information to standard output as a JSON string. */
-  void toJSON (Map fieldsInfo) {
-  }
-
-
-  /** Output information about the input file as a comment in the output. */
-  private void outputFileInfo (Map fieldsInfo) {
-    def fileInfo = fieldsInfo[FILE_INFO_KEYWORD]
+  /** Return a string containing information about the input file formatted as a comment. */
+  private String outputFileInfo (Map fieldsInfo) {
+    log.trace("(InformationOutputter.outputFileInfo): fieldsInfo=${fieldsInfo}")
+    StringBuffer buf = new StringBuffer()
+    def fileInfo = fieldsInfo[IInformationOutputter.FILE_INFO_KEYWORD]
     if (fileInfo) {
       if (outputFormat == 'sql') {
-        print("${SQL_COMMENT} ")
-        println(fileInfo?.filePath)
+        buf.append("${SQL_COMMENT} ")
+        buf.append(fileInfo?.fileName)
+        buf.append(' ')
+        buf.append(fileInfo?.fileSize)
+        buf.append(' ')
+        buf.append(fileInfo?.filePath)
+        buf.append('\n')
       }
-      // TODO: IMPLEMENT JSON LATER
     }
+    return buf.toString()
+  }
+
+
+  /** Return the given file information formatted as an SQL string. */
+  private String toSQL (Map fieldsInfo) {
+    log.trace("(InformationOutputter.toSQL): fieldsInfo=${fieldsInfo}")
+  }
+
+  /** Return the given file information formatted as a JSON string. */
+  private String toJSON (Map fieldsInfo) {
+    log.trace("(InformationOutputter.toJSON): fieldsInfo=${fieldsInfo}")
   }
 
 }
