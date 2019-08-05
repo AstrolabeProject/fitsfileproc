@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Continue calculating: implement coord processing. Fix exception catching.
+ *   Last Modified: Calculate estimated size field.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -95,7 +95,7 @@ class JwstProcessor implements IFitsFileProcessor {
       addDefaultValuesForFields(fieldsInfo)
 
       // try to compute values for computable fields which are still missing values
-      computeValuesForFields(headerFields, fieldsInfo)
+      computeValuesForFields(aFile, headerFields, fieldsInfo)
       if (DEBUG) {                          // REMOVE LATER
         fieldsInfo.each { entry -> println("${entry.key}=${entry.value}") }
       }
@@ -185,6 +185,7 @@ class JwstProcessor implements IFitsFileProcessor {
     }
   }
 
+
   /**
    * Try to fetch a value of the correct type for each field in the given fields map.
    * If found, a field value is added back to the corresponding field information.
@@ -235,7 +236,7 @@ class JwstProcessor implements IFitsFileProcessor {
    * Try to compute a value of the correct type for each field in the given
    * field maps which does not already have a value.
    */
-  private void computeValuesForFields (Map headerFields, Map fieldsInfo) {
+  private void computeValuesForFields (File aFile, Map headerFields, Map fieldsInfo) {
     log.trace("(JwstProcessor.computeValuesForFields): fieldsInfo=${fieldsInfo}")
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -249,7 +250,7 @@ class JwstProcessor implements IFitsFileProcessor {
 
     fieldsInfo.each { key, fieldInfo ->
       if (!hasValue(fieldInfo)) {           // do not replace existing values
-        computeValueForAField(fieldInfo, headerFields, fieldsInfo)
+        computeValueForAField(fieldInfo, aFile, headerFields, fieldsInfo)
       }
     }
   }
@@ -260,19 +261,20 @@ class JwstProcessor implements IFitsFileProcessor {
    * to the field information. The map containing all fields is also passed to this method
    * to enable calculations based on the values of other fields.
    */
-  private void computeValueForAField (Map fieldInfo, Map headerFields, Map fieldsInfo) {
-    // log.trace(
-    // "(JwstProcessor.computeValueForAField): fI=${fieldInfo}, hF=${headerFields}, fsI=${fieldsInfo}")
+  private void computeValueForAField (Map fieldInfo, File aFile, Map headerFields, Map fieldsInfo) {
+    log.trace(
+      "(JwstProcessor.computeValueForAField): fI=${fieldInfo}, aF=${aFile}, hF=${headerFields}, fsI=${fieldsInfo}")
+
     if (hasValue(fieldInfo))                // do not replace existing values
       return                                // exit out now
 
     def obsCoreKey = fieldInfo['obsCoreKey']
     switch(obsCoreKey) {
-      case ['s_ra', 's_dec']:
+      case ['s_ra', 's_dec']:               // coordinate fields extracted from the file
         handleWcsCoords(headerFields, fieldsInfo)
         break
-      case 'access_estsize':
-        // TODO: IMPLEMENT LATER
+      case 'access_estsize':                // estimated size is the size of the file
+        fieldInfo['value'] = aFile.length()
         break
       case 'instrument_name':               // NIRCam + MODULE value
         def module = getValueFor('nircam_module', fieldsInfo)
@@ -299,29 +301,6 @@ class JwstProcessor implements IFitsFileProcessor {
     }
   }
 
-
-  // def getFitsFields (Fits fits) {
-  //   log.trace("(JwstProcessor.getFitsFields): fits=${fits}")
-  //   Map hdrMap = [:]
-
-  //   BasicHDU bhdu = fits.getHDU(0)
-  //   Header header = bhdu.getHeader()
-  //   hdrMap = [
-  //     'NAXIS1'   : header.getIntValue('NAXIS1'), // FITS required keyword
-  //     'NAXIS2'   : header.getIntValue('NAXIS2'), // FITS required keyword
-  //     'AUTHOR'   : bhdu.getAuthor(),
-  //     'obs_creation_date' : bhdu.getCreationDate(),
-  //     'EQUINOX'  : bhdu.getEquinox(),
-  //     'INSTRUME' : bhdu.getInstrument(),
-  //     'OBJECT'   : bhdu.getObject(),
-  //     'DATE-OBS' : bhdu.getObservationDate(),
-  //     'OBSERVER' : bhdu.getObserver(),
-  //     'ORIGIN'   : bhdu.getOrigin(),
-  //     'TELESCOP' : bhdu.getInstrument()
-  //   ]
-
-  //   return hdrMap.findAll { it.value != null } // filter out null values
-  // }
 
   /**
    * Return a List of all non-comment (key/value pair) keywords
