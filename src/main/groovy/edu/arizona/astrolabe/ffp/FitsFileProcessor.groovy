@@ -6,13 +6,14 @@ import java.util.zip.GZIPInputStream
 import org.apache.logging.log4j.*
 
 import groovy.cli.commons.CliBuilder
+import groovy.transform.InheritConstructors
 
 /**
  * Astrolabe tool to process FITS files, extracting the metadata.
  *   This class parses and validates its arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Renamed aliases file. Added fields info file. Added alias/fields file validators.
+ *   Last Modified: Add AbortFileProcessingException.
  */
 class FitsFileProcessor {
 
@@ -225,3 +226,10 @@ interface IFitsFileProcessor {
   /** Do any needed processor instance cleanup. */
   // void exit()
 }
+
+
+/**
+ * Exception which is thrown by a Processor when it fails to entirely process a given file.
+ */
+@InheritConstructors
+class AbortFileProcessingException extends RuntimeException { }
