@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Begin calculated values: do a few easy ones.
+ *   Last Modified: Continue calculating: implement coord processing. Fix exception catching.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -84,16 +84,31 @@ class JwstProcessor implements IFitsFileProcessor {
     //   // headerFields.each { key, val -> println("${key}: ${val}") }
     // }
 
-    addInfoFromFitsHeaders(headerFields, fieldsInfo) // get FITS header field keys and values
-    addValuesForFields(fieldsInfo)          // fetch values from FITS file headers
-    addDefaultValuesForFields(fieldsInfo)   // add defaults for missing values, if possible
-    computeValuesForFields(fieldsInfo)      // try to compute values still missing
+    try {
+      // add header field keys and string values from the FITS file
+      addInfoFromFitsHeaders(headerFields, fieldsInfo)
 
-    if (DEBUG) {                            // REMOVE LATER
-      fieldsInfo.each { entry -> println("${entry.key}=${entry.value}") }
+      // convert the header field string values, where possible
+      addValuesForFields(fieldsInfo)
+
+      // add defaults for missing values, if possible
+      addDefaultValuesForFields(fieldsInfo)
+
+      // try to compute values for computable fields which are still missing values
+      computeValuesForFields(headerFields, fieldsInfo)
+      if (DEBUG) {                          // REMOVE LATER
+        fieldsInfo.each { entry -> println("${entry.key}=${entry.value}") }
+      }
+
+      // do some checks for required fields
+      ensureRequiredFields(fieldsInfo)
     }
-
-    ensureRequiredFields(fieldsInfo)        // check for all required fields
+    catch (AbortFileProcessingException afpx) {
+      def msg =
+        "Failed to process file '${aFile.getAbsolutePath()}'. Error message was:\n${afpx.message}"
+      logError('JwstProcessor.processAFile', msg)
+      return 0                              // signal failure to process the file
+    }
 
     return 1                                // successfully processed one more file
   }
@@ -134,15 +149,15 @@ class JwstProcessor implements IFitsFileProcessor {
     try {
       value = stringToValue(defaultStr, datatype) // extract value of given type
     }
-    catch (IllegalArgumentException iax) {
+    catch (NumberFormatException nfe) {     // MUST catch before parent exception below
       def obsCoreKey = fieldInfo['obsCoreKey']
-      def msg = "Unknown datatype '${datatype}' for field '${obsCoreKey}'. Field value not set."
+      def msg = "Unable to convert default value '${defaultStr}' for field '${obsCoreKey}' to '${datatype}'. Field value not set."
       logError('JwstProcessor.addDefaultValueForAField', msg)
       value = null
     }
-    catch (NumberFormatException nfe) {
+    catch (IllegalArgumentException iax) {
       def obsCoreKey = fieldInfo['obsCoreKey']
-      def msg = "Unable to convert default value '${defaultStr}' for field '${obsCoreKey}' to '${datatype}'. Field value not set."
+      def msg = "Unknown datatype '${datatype}' for field '${obsCoreKey}'. Field value not set."
       logError('JwstProcessor.addDefaultValueForAField', msg)
       value = null
     }
@@ -178,8 +193,6 @@ class JwstProcessor implements IFitsFileProcessor {
     log.trace("(JwstProcessor.findValuesForFields): fieldsInfo=${fieldsInfo}")
     fieldsInfo.each { key, fieldInfo ->
       addValueForAField(fieldInfo)
-      // if (DEBUG)                                // REMOVE LATER
-      //   println("aVFF: FIELDINFO=${fieldInfo}") // REMOVE LATER
     }
   }
 
@@ -200,14 +213,15 @@ class JwstProcessor implements IFitsFileProcessor {
     try {
       value = stringToValue(valueStr, datatype) // extract value of given type
     }
-    catch (IllegalArgumentException iax) {
-      def msg = "Unknown datatype '${datatype}' for field '${fitsKey}'. Ignoring bad field value."
+    catch (NumberFormatException nfe) {     // MUST catch before parent exception below
+      def fitsKey = fieldInfo['hdrKey']     // header key from FITS file
+      def msg = "Unable to convert value '${valueStr}' for field '${fitsKey}' to '${datatype}'. Ignoring bad field value."
       logError('JwstProcessor.addValueForAField', msg)
       value = null
     }
-    catch (NumberFormatException nfe) {
+    catch (IllegalArgumentException iax) {
       def fitsKey = fieldInfo['hdrKey']     // header key from FITS file
-      def msg = "Unable to convert value '${valueStr}' for field '${fitsKey}' to '${datatype}'. Ignoring bad field value."
+      def msg = "Unknown datatype '${datatype}' for field '${fitsKey}'. Ignoring bad field value."
       logError('JwstProcessor.addValueForAField', msg)
       value = null
     }
@@ -221,20 +235,21 @@ class JwstProcessor implements IFitsFileProcessor {
    * Try to compute a value of the correct type for each field in the given
    * field maps which does not already have a value.
    */
-  private void computeValuesForFields (Map fieldsInfo) {
+  private void computeValuesForFields (Map headerFields, Map fieldsInfo) {
     log.trace("(JwstProcessor.computeValuesForFields): fieldsInfo=${fieldsInfo}")
 
-    /////////////////////////////////////////////////////////////////////
-    // NOTE: SPECIAL CASE: correct the zero value with a default of 1347.0
-    //       REMOVE if the t_exptime field gets real values.
+    ////////////////////////////////////////////////////////////////////////////////
+    // NOTE: SPECIAL CASE: correct the t_exptime zero value
+    //       with a default of 1347.0 per Eiichi Egami 20190626.
+    //       Remove this code when the t_exptime field gets real values in the future.
     def tExptime = getValueFor('t_exptime', fieldsInfo)
     if (tExptime == 0.0)
-      fieldsInfo['t_exptime']['value'] = 1347.0 as Double // value per Eiichi Egami 20190626
-    /////////////////////////////////////////////////////////////////////
+      fieldsInfo['t_exptime']['value'] = 1347.0 as Double
+    ////////////////////////////////////////////////////////////////////////////////
 
     fieldsInfo.each { key, fieldInfo ->
       if (!hasValue(fieldInfo)) {           // do not replace existing values
-        computeValueForAField(fieldInfo, fieldsInfo)
+        computeValueForAField(fieldInfo, headerFields, fieldsInfo)
       }
     }
   }
@@ -242,16 +257,23 @@ class JwstProcessor implements IFitsFileProcessor {
   /**
    * Try to compute a value of the correct type for the given field information
    * map which does not already have a value. If successful, the value is added back
-   * to the field information.
+   * to the field information. The map containing all fields is also passed to this method
+   * to enable calculations based on the values of other fields.
    */
-  private void computeValueForAField (Map fieldInfo, Map fieldsInfo) {
-    // log.trace("(JwstProcessor.computeValueForAField): fieldInfo=${fieldInfo}, fieldsInfo=${fieldsInfo}")
-    log.info("(JwstProcessor.computeValueForAField): fieldInfo=${fieldInfo}") // REMOVE LATER
+  private void computeValueForAField (Map fieldInfo, Map headerFields, Map fieldsInfo) {
+    // log.trace(
+    // "(JwstProcessor.computeValueForAField): fI=${fieldInfo}, hF=${headerFields}, fsI=${fieldsInfo}")
     if (hasValue(fieldInfo))                // do not replace existing values
       return                                // exit out now
 
     def obsCoreKey = fieldInfo['obsCoreKey']
     switch(obsCoreKey) {
+      case ['s_ra', 's_dec']:
+        handleWcsCoords(headerFields, fieldsInfo)
+        break
+      case 'access_estsize':
+        // TODO: IMPLEMENT LATER
+        break
       case 'instrument_name':               // NIRCam + MODULE value
         def module = getValueFor('nircam_module', fieldsInfo)
         fieldInfo['value'] = (module != null) ? "NIRCam-${module}" : "NIRCam"
@@ -336,6 +358,43 @@ class JwstProcessor implements IFitsFileProcessor {
     def fld = fieldsInfo.get(whichField)
     return ((fld != null) ? fld.get('value') : null)
   }
+
+
+  /**
+   * Extract the WCS coordinates for the current file. Sets both s_ra and s_dec fields
+   * simultaneously when given either one. This method assumes that neither s_ra nor
+   * s_dec fields have a value yet and it will overwrite current values for both
+   * s_ra and s_dec if that assumption is not valid.
+   *
+   * NOTE: Currently we only handle Tangent Plane (gnomonic) projections, as specified
+   *       by the FITS CTYPE1 header field. All other projections cause processing of
+   *       the current file to be aborted.
+   */
+  private void handleWcsCoords (Map headerFields, Map fieldsInfo) {
+    def ctype1 = headerFields['CTYPE1']
+    def ctype2 = headerFields['CTYPE2']
+    def crval1 = headerFields['CRVAL1']
+    def crval2 = headerFields['CRVAL2']
+
+    def raInfo  = fieldsInfo['s_ra']        // get s_ra entry
+    def decInfo = fieldsInfo['s_dec']       // get s_dec entry
+
+    if (ctype1 && ctype2 && crval1 && crval2 && raInfo && decInfo) {  // sanity check all vars
+      if (ctype1 == 'RA---TAN') {           // if CRVAL1 has the RA value
+        raInfo['value'] = crval1            // put CRVAL1 value into s_ra
+        decInfo['value'] = crval2           // put CRVAL2 value into s_dec
+      }
+      else if (ctype1 == 'DEC--TAN') {      // if CRVAL1 has the DEC value
+        decInfo['value'] = crval1           // put CRVAL1 value into s_dec
+        raInfo['value'] = crval2            // put CRVAL2 value into s_ra
+      }
+      else {                                // else cannot handle the projection type
+        throw new AbortFileProcessingException(
+          "This program currently only handles Tangent Plane projection and cannot process files with CTYPE1 of '${ctype1}'.")
+      }
+    }
+  }
+
 
   /** Return true if the given field info map has a data value, else return false. */
   private boolean hasValue (Map fieldInfo) {
@@ -488,6 +547,8 @@ class JwstProcessor implements IFitsFileProcessor {
    * are limited: "date", "double", "integer", "string".
    */
   private def stringToValue (String valueStr, String datatype) {
+    log.trace("(JwstProcessor.stringToValue): valueStr='${valueStr}', datatype='${datatype}'")
+
     if ((valueStr == null) || !datatype)    // sanity check: need at least value and datatype
       return null                           // exit out now
 
