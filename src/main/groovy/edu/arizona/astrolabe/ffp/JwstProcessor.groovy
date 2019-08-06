@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Fixes: dont process field infos w/o ObsCore key, explicitly caste some fields.
+ *   Last Modified: Make all verbose/debug output go to error out.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -64,7 +64,7 @@ class JwstProcessor implements IFitsFileProcessor {
     // load the FITS field name aliases from a given file path or a default resource path.
     fitsAliases = loadAliases(config.aliasFile)
     // if (DEBUG)                              // REMOVE LATER
-    //   fitsAliases.each { entry -> println("${entry.key}=${entry.value}") }
+    //   fitsAliases.each { entry -> System.err.println("${entry.key}=${entry.value}") }
     infoOutputter = new InformationOutputter(configuration)
   }
 
@@ -79,13 +79,14 @@ class JwstProcessor implements IFitsFileProcessor {
 
     // Map defining information for fields processed by this processor.
     // Loads the field information from a given file or a default resource path.
+    // NOTE: need to reload this for each file as it will be mutated for each file:
     Map fieldsInfo = loadFieldsInfo(config.fieldsFile)
 
     Header header = fits.getHDU(0).getHeader() // get the header from the primary HDU
     Map headerFields = getHeaderFields(fits)   // get a map of all FITS headers and value strings
     // if (DEBUG) {                               // REMOVE LATER
-    //   println("HDR FIELDS(${headerFields.size()}): ${headerFields}")
-    //   // headerFields.each { key, val -> println("${key}: ${val}") }
+    //   System.err.println("HDR FIELDS(${headerFields.size()}): ${headerFields}")
+    //   // headerFields.each { key, val -> System.err.println("${key}: ${val}") }
     // }
 
     try {
@@ -104,7 +105,7 @@ class JwstProcessor implements IFitsFileProcessor {
       // try to compute values for computable fields which are still missing values
       computeValuesForFields(headerFields, fieldsInfo)
       if (DEBUG) {                          // REMOVE LATER
-        fieldsInfo.each { entry -> println("${entry.key}=${entry.value}") }
+        fieldsInfo.each { entry -> System.err.println("${entry.key}=${entry.value}") }
       }
 
       // do some checks for required fields
