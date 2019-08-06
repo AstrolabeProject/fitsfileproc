@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration status="error">
   <Appenders>
-    <Console name="Console" target="SYSTEM_OUT">
+    <Console name="Console" target="SYSTEM_ERR">
       <PatternLayout pattern="%d [%t] %-5p: %m%n"/>
     </Console>
   </Appenders>
