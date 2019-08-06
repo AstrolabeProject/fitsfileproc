@@ -30,7 +30,7 @@ dependencies {
 //   groovyOptions.configurationScript = file("src/conf/config.groovy")
 // }
 
-version = '0.0.7'
+version = '0.0.11'
 mainClassName = 'edu.arizona.astrolabe.ffp.FitsFileProcessor'
 sourceCompatibility = 1.8
 
