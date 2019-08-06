@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Make all verbose/debug output go to error out.
+ *   Last Modified: Remove o_ucd: provided in defaults.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -306,10 +306,6 @@ class JwstProcessor implements IFitsFileProcessor {
         def module = getValueFor('nircam_module', fieldsInfo)
         String instName = (module != null) ? "NIRCam-${module}" : "NIRCam"
         fieldInfo['value'] = instName
-        break
-      case 'o_ucd':
-        // NOTE: Ask Eiichi about o_ucd: what is being measured? photo.flux.density? others?
-        fieldInfo['value'] = 'photo.flux'   // TODO: LATER check with Eiichi
         break
     }
   }

@@ -13,7 +13,7 @@
 # Observation Information (section B.1)
 #
 dataproduct_type, string, true, image
-calib_level, integer, true, 2
+calib_level, integer, true, 3
 
 # Target Information (section B.2)
 #
@@ -61,7 +61,7 @@ t_resolution, double, true, *
 
 # Observable Axis (section B.6.4)
 #
-o_ucd, string, true, *
+o_ucd, string, true, photo.count
 
 # Polarization Characterisation (section B.6.5)
 #
