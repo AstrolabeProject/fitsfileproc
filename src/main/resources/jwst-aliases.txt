@@ -103,4 +103,4 @@ PUPIL   , pupil
 READPATT, read_pattern
 
 # for JWST, DATE is the FITS timestamp (GMT):
-DATE    , jwst_date
+DATE    , gmt_date
