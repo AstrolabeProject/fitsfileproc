@@ -7,8 +7,7 @@ import org.apache.logging.log4j.*
  * Class to implement general output methods for the Astrolabe FITS File Processor project.
  *
  *   Written by: Tom Hicks. 8/5/2019.
- *   Last Modified: Move file info keyword constant to the IInformationOutputter interface.
- *                  Demote and re-type to* methods. Stub out new output information method.
+ *   Last Modified: Rename generator methods. Generate initial SQL data line insertion statement.
  */
 class InformationOutputter implements IInformationOutputter {
   static final Logger log = LogManager.getLogger(InformationOutputter.class.getName());
@@ -16,6 +15,8 @@ class InformationOutputter implements IInformationOutputter {
   /** String which defines a comment line in the SQL output. */
   private static final String SQL_COMMENT = '--'
 
+  // TODO: LATER read DB parameters from somewhere:
+  private final String tableName = 'sia.jwst'
 
   /** Debug setting: when true, show internal information for debugging. */
   private boolean DEBUG   = false
@@ -44,7 +45,9 @@ class InformationOutputter implements IInformationOutputter {
 
   /** Output the given field information using the current output settings. */
   void outputInformation (Map fieldsInfo) {
-    println(outputFileInfo(fieldsInfo))
+    println(makeFileInfo(fieldsInfo))
+    println(makeDataLine(fieldsInfo))
+    // TODO: ENHANCE IMPLEMENTATION
   }
 
   /** Load the given field information directly into a PostgreSQL database. */
@@ -52,9 +55,18 @@ class InformationOutputter implements IInformationOutputter {
   }
 
 
+  private String makeDataLine (Map fieldsInfo) {
+    log.trace("(InformationOutputter.makeDataLine): fieldsInfo=${fieldsInfo}")
+    if (outputFormat == 'sql') {
+      return toSQL(fieldsInfo)
+    }
+    // TODO: handle JSON
+  }
+
+
   /** Return a string containing information about the input file formatted as a comment. */
-  private String outputFileInfo (Map fieldsInfo) {
-    log.trace("(InformationOutputter.outputFileInfo): fieldsInfo=${fieldsInfo}")
+  private String makeFileInfo (Map fieldsInfo) {
+    log.trace("(InformationOutputter.makeFileInfo): fieldsInfo=${fieldsInfo}")
     StringBuffer buf = new StringBuffer()
     def fileInfo = fieldsInfo[IInformationOutputter.FILE_INFO_KEYWORD]
     if (fileInfo) {
@@ -65,16 +77,25 @@ class InformationOutputter implements IInformationOutputter {
         buf.append(fileInfo?.fileSize)
         buf.append(' ')
         buf.append(fileInfo?.filePath)
-        buf.append('\n')
       }
     }
     return buf.toString()
   }
 
 
+  /** Return true if the given field info map has a data value, else return false. */
+  private boolean hasValue (Map fieldInfo) {
+    return (fieldInfo['value'] != null)
+  }
+
   /** Return the given file information formatted as an SQL string. */
   private String toSQL (Map fieldsInfo) {
     log.trace("(InformationOutputter.toSQL): fieldsInfo=${fieldsInfo}")
+    def valued = fieldsInfo.findAll { key, fieldInfo -> hasValue(fieldInfo) }
+    def keys = valued.keySet().join(', ')
+    def vals = valued.values().collect{it['value']}
+    def values = vals.collect {(it instanceof String) ? "'${it}'" : it}.join(', ')
+    return "insert into ${tableName} (${keys}) values (${values})"
   }
 
   /** Return the given file information formatted as a JSON string. */
