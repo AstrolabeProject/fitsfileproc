@@ -83,6 +83,7 @@ obs_creator_name, string, false, FAKE_OBS_CREATOR_NAME
 #
 # JWST-specific fieldnames
 #
+is_public, integer, true, 0
 equinox, double, false, 2000.0
 radesys, string, false, ICRS
 
