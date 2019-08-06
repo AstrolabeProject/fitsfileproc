@@ -10,8 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Add file info directly to fields information and redo some methods to use it.
- *                  Instantiate an information outputter and call it.
+ *   Last Modified: Fixes: dont process field infos w/o ObsCore key, explicitly caste some fields.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -304,7 +303,8 @@ class JwstProcessor implements IFitsFileProcessor {
         break
       case 'instrument_name':               // NIRCam + MODULE value
         def module = getValueFor('nircam_module', fieldsInfo)
-        fieldInfo['value'] = (module != null) ? "NIRCam-${module}" : "NIRCam"
+        String instName = (module != null) ? "NIRCam-${module}" : "NIRCam"
+        fieldInfo['value'] = instName
         break
       case 'o_ucd':
         // NOTE: Ask Eiichi about o_ucd: what is being measured? photo.flux.density? others?
@@ -318,8 +318,8 @@ class JwstProcessor implements IFitsFileProcessor {
     log.trace("(JwstProcessor.ensureRequiredFields): fieldsInfo=${fieldsInfo}")
     // TODO: IMPLEMENT MORE LATER?
     fieldsInfo.each { key, fieldInfo ->
-      if (!hasValue(fieldInfo)) {           // find fields which still have no value
-        def obsCoreKey = fieldInfo['obsCoreKey']
+      def obsCoreKey = fieldInfo['obsCoreKey']
+      if (obsCoreKey && !hasValue(fieldInfo)) { // find ObsCore fields which still have no value
         def reqFld = fieldInfo['required'] ? 'Required' : 'Optional'
         def msg = "${reqFld} field '${obsCoreKey}' still does not have a value."
         if (VERBOSE || DEBUG)
@@ -379,8 +379,8 @@ class JwstProcessor implements IFitsFileProcessor {
   private void handleWcsCoords (Map headerFields, Map fieldsInfo) {
     def ctype1 = headerFields['CTYPE1']
     def ctype2 = headerFields['CTYPE2']
-    def crval1 = headerFields['CRVAL1']
-    def crval2 = headerFields['CRVAL2']
+    def crval1 = headerFields['CRVAL1'] as Double
+    def crval2 = headerFields['CRVAL2'] as Double
 
     def raInfo  = fieldsInfo['s_ra']        // get s_ra entry
     def decInfo = fieldsInfo['s_dec']       // get s_dec entry
