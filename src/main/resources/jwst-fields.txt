@@ -31,7 +31,7 @@ obs_publisher_did, string, true, FAKE_OBS_PUBLISHER_DID
 # Access Information (section B.5)
 #
 access_url, string, true, http://astrolabe.arizona.edu/FAKE/acess_url
-access_format, string, true, application/FITS
+access_format, string, true, application/fits
 access_estsize, integer, true, *
 
 # Spatial Characterisation (section B.6.1)
@@ -65,8 +65,8 @@ o_ucd, string, true, *
 
 # Polarization Characterisation (section B.6.5)
 #
-pol_xel, integer, true
-pol_states, string, true
+pol_xel, integer, true, *
+pol_states, string, true, *
 
 # Provenance (section B.7)
 #
@@ -93,4 +93,4 @@ pupil, string, false, CLEAR
 read_pattern, string, false, DEEP8
 
 # for JWST, DATE is the FITS timestamp (GMT):
-jwst_date, date, false, *
+jwst_date, string, false, *
