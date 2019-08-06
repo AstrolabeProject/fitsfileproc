@@ -7,7 +7,7 @@ import org.apache.logging.log4j.*
  * Class to implement general output methods for the Astrolabe FITS File Processor project.
  *
  *   Written by: Tom Hicks. 8/5/2019.
- *   Last Modified: Rename generator methods. Generate initial SQL data line insertion statement.
+ *   Last Modified: Fix: add SQL command terminator.
  */
 class InformationOutputter implements IInformationOutputter {
   static final Logger log = LogManager.getLogger(InformationOutputter.class.getName());
@@ -95,7 +95,7 @@ class InformationOutputter implements IInformationOutputter {
     def keys = valued.keySet().join(', ')
     def vals = valued.values().collect{it['value']}
     def values = vals.collect {(it instanceof String) ? "'${it}'" : it}.join(', ')
-    return "insert into ${tableName} (${keys}) values (${values})"
+    return "insert into ${tableName} (${keys}) values (${values});"
   }
 
   /** Return the given file information formatted as a JSON string. */
