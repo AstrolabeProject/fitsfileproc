@@ -46,10 +46,10 @@ s_xel2, integer, true, *
 
 # Spectral Characterisation (section B.6.2)
 #
-em_xel, integer, true, *
-em_min, double, true, *
-em_max, double, true, *
-em_res_power, double, true, *
+# em_xel, integer, true, *
+# em_min, double, true, *
+# em_max, double, true, *
+# em_res_power, double, true, *
 
 # Time Characterisation (section B.6.3)
 #
@@ -65,8 +65,8 @@ o_ucd, string, true, photo.count
 
 # Polarization Characterisation (section B.6.5)
 #
-pol_xel, integer, true, *
-pol_states, string, true, *
+# pol_xel, integer, true, *
+# pol_states, string, true, *
 
 # Provenance (section B.7)
 #
@@ -81,6 +81,23 @@ obs_creator_name, string, false, FAKE_OBS_CREATOR_NAME
 
 
 #
+# DALserver Mandatory
+#
+spat_lolimit1, double
+spat_hilimit1, double
+spat_lolimit2, double
+spat_hilimit2, double
+ra1, double
+dec1, double
+ra2, double
+dec2, double
+ra3, double
+dec3, double
+ra4, double
+dec4, double
+
+
+#
 # JWST-specific fieldnames
 #
 is_public, integer, true, 0
@@ -91,7 +108,6 @@ nircam_channel, string, false, LONG
 nircam_module, string, false, A
 filter, string, false, *
 pupil, string, false, CLEAR
-read_pattern, string, false, DEEP8
 
 # for JWST, DATE is the FITS timestamp (GMT):
 gmt_date, string, false, *
