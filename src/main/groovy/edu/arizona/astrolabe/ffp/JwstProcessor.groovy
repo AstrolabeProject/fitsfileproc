@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Stub out methods for calculating corners and spatial limits.
+ *   Last Modified: Rename calculation methods and stubs. Calculate plate scale for each image.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -77,6 +77,9 @@ class JwstProcessor implements IFitsFileProcessor {
     if (!fits)                              // if unable to open/read FITS file
       return 0                              // then skip this file
 
+    if (VERBOSE)
+      log.info("(JwstProcessor.processAFile): Processing FITS file '${aFile.getAbsolutePath()}'")
+
     // Map defining information for fields processed by this processor.
     // Loads the field information from a given file or a default resource path.
     // NOTE: need to reload this for each file as it will be mutated for each file:
@@ -89,14 +92,13 @@ class JwstProcessor implements IFitsFileProcessor {
     //   // headerFields.each { key, val -> System.err.println("${key}: ${val}") }
     // }
 
-    //
-    // TODO: IMPLEMENT LATER: calculate the plate scale here for each image?
-    //
+    // add information about the input file that is being processed
+    addFileInformation(aFile, fieldsInfo)
+
+    // calculate the plate scale each image:
+    Double plateScale = calcPlateScale(headerFields, fieldsInfo)
 
     try {
-      // add information about the input file that is being processed
-      addFileInformation(aFile, fieldsInfo)
-
       // add header field keys and string values from the FITS file
       addInfoFromFitsHeaders(headerFields, fieldsInfo)
 
@@ -260,6 +262,86 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
 
+  // TODO: IMPLEMENT LATER
+  private void calcCorners (Map headerFields, Map fieldsInfo) {
+    log.trace("(JwstProcessor.calcCorners): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
+  }
+
+  /**
+   * Calculate the plate scale (arcsec/pixel) for the current image using the given
+   * FITS file header and field information.
+   *  scale = 3600.0 * sqrt((cd1_1**2 + cd2_1**2 + cd1_2**2 + cd2_2**2) / 2.0)
+   */
+  private Double calcPlateScale (Map headerFields, Map fieldsInfo) {
+    log.trace("(JwstProcessor.calcPlateScale): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
+    def cd1_1 = headerFields['CD1_1'] as Double
+    def cd1_2 = headerFields['CD1_2'] as Double
+    def cd2_1 = headerFields['CD2_1'] as Double
+    def cd2_2 = headerFields['CD2_2'] as Double
+
+    if ( (cd1_1 != null) && (cd1_2 != null) &&  // sanity check all vars
+         (cd2_1 != null) && (cd2_2 != null) )
+    {
+      Double scale = 3600.0 * Math.sqrt( (Math.pow(cd1_1, 2.0) +
+                                          Math.pow(cd1_2, 2.0) +
+                                          Math.pow(cd2_1, 2.0) +
+                                          Math.pow(cd2_2, 2.0) / 2.0) )
+      def fileInfo = fieldsInfo[IInformationOutputter.FILE_INFO_KEYWORD]
+      if (fileInfo)
+        fileInfo['plateScale'] = scale
+      return scale
+    }
+  }
+
+  // TODO: IMPLEMENT LATER
+  private void calcSpatialLimits (Map headerFields, Map fieldsInfo) {
+    log.trace("(JwstProcessor.calcSpatialLimits): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
+    def lo1Info  = fieldsInfo['spat_lolimit1']
+    def hi1Info  = fieldsInfo['spat_hilimit1']
+    def lo2Info  = fieldsInfo['spat_lolimit2']
+    def hi2Info  = fieldsInfo['spat_hilimit2']
+
+    if (lo1Info && hi1Info && lo2Info && hi2Info) {  // sanity check all vars
+    }
+  }
+
+  /**
+   * Extract the WCS coordinates for the current file. Sets both s_ra and s_dec fields
+   * simultaneously when given either one. This method assumes that neither s_ra nor
+   * s_dec fields have a value yet and it will overwrite current values for both
+   * s_ra and s_dec if that assumption is not valid.
+   *
+   * NOTE: Currently we only handle Tangent Plane (gnomonic) projections, as specified
+   *       by the FITS CTYPE1 header field. All other projections cause processing of
+   *       the current file to be aborted.
+   */
+  private void calcWcsCoords (Map headerFields, Map fieldsInfo) {
+    log.trace("(JwstProcessor.calcWcsCoords): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
+    def ctype1 = headerFields['CTYPE1']
+    def ctype2 = headerFields['CTYPE2']
+    def crval1 = headerFields['CRVAL1'] as Double
+    def crval2 = headerFields['CRVAL2'] as Double
+
+    def raInfo  = fieldsInfo['s_ra']        // get s_ra entry
+    def decInfo = fieldsInfo['s_dec']       // get s_dec entry
+
+    if (ctype1 && ctype2 && crval1 && crval2 && raInfo && decInfo) {  // sanity check all vars
+      if (ctype1 == 'RA---TAN') {           // if CRVAL1 has the RA value
+        raInfo['value'] = crval1            // put CRVAL1 value into s_ra
+        decInfo['value'] = crval2           // put CRVAL2 value into s_dec
+      }
+      else if (ctype1 == 'DEC--TAN') {      // if CRVAL1 has the DEC value
+        decInfo['value'] = crval1           // put CRVAL1 value into s_dec
+        raInfo['value'] = crval2            // put CRVAL2 value into s_ra
+      }
+      else {                                // else cannot handle the projection type
+        throw new AbortFileProcessingException(
+          "This program currently only handles Tangent Plane projection and cannot yet process files with CTYPE1 of '${ctype1}'.")
+      }
+    }
+  }
+
+
   /**
    * Try to compute a value of the correct type for each field in the given
    * field maps which does not already have a value.
@@ -299,13 +381,13 @@ class JwstProcessor implements IFitsFileProcessor {
     def obsCoreKey = fieldInfo['obsCoreKey']
     switch(obsCoreKey) {
       case ['s_ra', 's_dec']:               // coordinate fields extracted from the file
-        handleWcsCoords(headerFields, fieldsInfo)
+        calcWcsCoords(headerFields, fieldsInfo)
         break
       case [ 'ra1', 'dec1', 'ra2', 'dec2', 'ra3', 'dec3', 'ra4', 'dec4' ]:
-        handleCorners(headerFields, fieldsInfo)
+        calcCorners(headerFields, fieldsInfo)
         break
       case [ 'spat_lolimit1', 'spat_hilimit1', 'spat_lolimit2', 'spat_hilimit2' ]:
-        handleSpatialLimits(headerFields, fieldsInfo)
+        calcSpatialLimits(headerFields, fieldsInfo)
         break
       case 'access_estsize':                // estimated size is the size of the file
         def fileInfo = fieldsInfo[IInformationOutputter.FILE_INFO_KEYWORD]
@@ -370,60 +452,6 @@ class JwstProcessor implements IFitsFileProcessor {
   private def getValueFor (String whichField, Map fieldsInfo) {
     def fld = fieldsInfo.get(whichField)
     return ((fld != null) ? fld.get('value') : null)
-  }
-
-
-  // TODO: IMPLEMENT LATER
-  private void handleCorners (Map headerFields, Map fieldsInfo) {
-    log.trace("(JwstProcessor.handleCorners): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
-  }
-
-  // TODO: IMPLEMENT LATER
-  private void handleSpatialLimits (Map headerFields, Map fieldsInfo) {
-    log.trace("(JwstProcessor.handleSpatialLimits): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
-    def lo1Info  = fieldsInfo['spat_lolimit1']
-    def hi1Info  = fieldsInfo['spat_hilimit1']
-    def lo2Info  = fieldsInfo['spat_lolimit2']
-    def hi2Info  = fieldsInfo['spat_hilimit2']
-
-    if (lo1Info && hi1Info && lo2Info && hi2Info) {  // sanity check all vars
-    }
-  }
-
-  /**
-   * Extract the WCS coordinates for the current file. Sets both s_ra and s_dec fields
-   * simultaneously when given either one. This method assumes that neither s_ra nor
-   * s_dec fields have a value yet and it will overwrite current values for both
-   * s_ra and s_dec if that assumption is not valid.
-   *
-   * NOTE: Currently we only handle Tangent Plane (gnomonic) projections, as specified
-   *       by the FITS CTYPE1 header field. All other projections cause processing of
-   *       the current file to be aborted.
-   */
-  private void handleWcsCoords (Map headerFields, Map fieldsInfo) {
-    log.trace("(JwstProcessor.handleWcsCoords): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
-    def ctype1 = headerFields['CTYPE1']
-    def ctype2 = headerFields['CTYPE2']
-    def crval1 = headerFields['CRVAL1'] as Double
-    def crval2 = headerFields['CRVAL2'] as Double
-
-    def raInfo  = fieldsInfo['s_ra']        // get s_ra entry
-    def decInfo = fieldsInfo['s_dec']       // get s_dec entry
-
-    if (ctype1 && ctype2 && crval1 && crval2 && raInfo && decInfo) {  // sanity check all vars
-      if (ctype1 == 'RA---TAN') {           // if CRVAL1 has the RA value
-        raInfo['value'] = crval1            // put CRVAL1 value into s_ra
-        decInfo['value'] = crval2           // put CRVAL2 value into s_dec
-      }
-      else if (ctype1 == 'DEC--TAN') {      // if CRVAL1 has the DEC value
-        decInfo['value'] = crval1           // put CRVAL1 value into s_dec
-        raInfo['value'] = crval2            // put CRVAL2 value into s_ra
-      }
-      else {                                // else cannot handle the projection type
-        throw new AbortFileProcessingException(
-          "This program currently only handles Tangent Plane projection and cannot process files with CTYPE1 of '${ctype1}'.")
-      }
-    }
   }
 
 
