@@ -83,18 +83,18 @@ obs_creator_name, string, false, FAKE_OBS_CREATOR_NAME
 #
 # DALserver Mandatory
 #
-spat_lolimit1, double
-spat_hilimit1, double
-spat_lolimit2, double
-spat_hilimit2, double
-ra1, double
-dec1, double
-ra2, double
-dec2, double
-ra3, double
-dec3, double
-ra4, double
-dec4, double
+spat_lolimit1, double, true, *
+spat_hilimit1, double, true, *
+spat_lolimit2, double, true, *
+spat_hilimit2, double, true, *
+ra1, double, true, *
+dec1, double, true, *
+ra2, double, true, *
+dec2, double, true, *
+ra3, double, true, *
+dec3, double, true, *
+ra4, double, true, *
+dec4, double, true, *
 
 
 #
