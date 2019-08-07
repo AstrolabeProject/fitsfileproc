@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Remove o_ucd: provided in defaults.
+ *   Last Modified: Stub out methods for calculating corners and spatial limits.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -88,6 +88,10 @@ class JwstProcessor implements IFitsFileProcessor {
     //   System.err.println("HDR FIELDS(${headerFields.size()}): ${headerFields}")
     //   // headerFields.each { key, val -> System.err.println("${key}: ${val}") }
     // }
+
+    //
+    // TODO: IMPLEMENT LATER: calculate the plate scale here for each image?
+    //
 
     try {
       // add information about the input file that is being processed
@@ -297,6 +301,12 @@ class JwstProcessor implements IFitsFileProcessor {
       case ['s_ra', 's_dec']:               // coordinate fields extracted from the file
         handleWcsCoords(headerFields, fieldsInfo)
         break
+      case [ 'ra1', 'dec1', 'ra2', 'dec2', 'ra3', 'dec3', 'ra4', 'dec4' ]:
+        handleCorners(headerFields, fieldsInfo)
+        break
+      case [ 'spat_lolimit1', 'spat_hilimit1', 'spat_lolimit2', 'spat_hilimit2' ]:
+        handleSpatialLimits(headerFields, fieldsInfo)
+        break
       case 'access_estsize':                // estimated size is the size of the file
         def fileInfo = fieldsInfo[IInformationOutputter.FILE_INFO_KEYWORD]
         if (fileInfo && fileInfo['fileSize'])
@@ -363,6 +373,23 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
 
+  // TODO: IMPLEMENT LATER
+  private void handleCorners (Map headerFields, Map fieldsInfo) {
+    log.trace("(JwstProcessor.handleCorners): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
+  }
+
+  // TODO: IMPLEMENT LATER
+  private void handleSpatialLimits (Map headerFields, Map fieldsInfo) {
+    log.trace("(JwstProcessor.handleSpatialLimits): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
+    def lo1Info  = fieldsInfo['spat_lolimit1']
+    def hi1Info  = fieldsInfo['spat_hilimit1']
+    def lo2Info  = fieldsInfo['spat_lolimit2']
+    def hi2Info  = fieldsInfo['spat_hilimit2']
+
+    if (lo1Info && hi1Info && lo2Info && hi2Info) {  // sanity check all vars
+    }
+  }
+
   /**
    * Extract the WCS coordinates for the current file. Sets both s_ra and s_dec fields
    * simultaneously when given either one. This method assumes that neither s_ra nor
@@ -374,6 +401,7 @@ class JwstProcessor implements IFitsFileProcessor {
    *       the current file to be aborted.
    */
   private void handleWcsCoords (Map headerFields, Map fieldsInfo) {
+    log.trace("(JwstProcessor.handleWcsCoords): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
     def ctype1 = headerFields['CTYPE1']
     def ctype2 = headerFields['CTYPE2']
     def crval1 = headerFields['CRVAL1'] as Double
