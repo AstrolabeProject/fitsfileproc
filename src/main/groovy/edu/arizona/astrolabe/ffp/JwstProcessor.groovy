@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Rename calculation methods and stubs. Calculate plate scale for each image.
+ *   Last Modified: Save scale calculation in DALserver field. Fake corners and spatial limits.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -95,7 +95,7 @@ class JwstProcessor implements IFitsFileProcessor {
     // add information about the input file that is being processed
     addFileInformation(aFile, fieldsInfo)
 
-    // calculate the plate scale each image:
+    // calculate the plate scale for each image:
     Double plateScale = calcPlateScale(headerFields, fieldsInfo)
 
     try {
@@ -265,6 +265,20 @@ class JwstProcessor implements IFitsFileProcessor {
   // TODO: IMPLEMENT LATER
   private void calcCorners (Map headerFields, Map fieldsInfo) {
     log.trace("(JwstProcessor.calcCorners): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
+    // TODO: IMPLEMENT LATER
+    // NOTE: THIS CONSTANT DATA IS CALCULATED FROM ONE IMAGE:
+    if (['im_ra1','im_dec1', 'im_ra2','im_dec2',
+         'im_ra3','im_dec3', 'im_ra4','im_dec4'].collect{fieldsInfo[it]}.every{it})
+    {
+      fieldsInfo['im_ra1']['value']  = 53.24930803  // LL
+      fieldsInfo['im_dec1']['value'] = -27.85921858 // LL
+      fieldsInfo['im_ra2']['value']  = 53.09737379  // LR
+      fieldsInfo['im_dec2']['value'] = -27.85922807 // LR
+      fieldsInfo['im_ra3']['value']  = 53.09744592  // UR
+      fieldsInfo['im_dec3']['value'] = -27.74263653 // UR
+      fieldsInfo['im_ra4']['value']  = 53.24921734  // UL
+      fieldsInfo['im_dec4']['value'] = -27.74262709 // UL
+    }
   }
 
   /**
@@ -286,9 +300,9 @@ class JwstProcessor implements IFitsFileProcessor {
                                           Math.pow(cd1_2, 2.0) +
                                           Math.pow(cd2_1, 2.0) +
                                           Math.pow(cd2_2, 2.0) / 2.0) )
-      def fileInfo = fieldsInfo[IInformationOutputter.FILE_INFO_KEYWORD]
-      if (fileInfo)
-        fileInfo['plateScale'] = scale
+      def fieldInfo = fieldsInfo['im_scale']
+      if (fieldInfo)
+        fieldInfo['value'] = scale
       return scale
     }
   }
@@ -296,12 +310,24 @@ class JwstProcessor implements IFitsFileProcessor {
   // TODO: IMPLEMENT LATER
   private void calcSpatialLimits (Map headerFields, Map fieldsInfo) {
     log.trace("(JwstProcessor.calcSpatialLimits): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
+    def crpix1 = headerFields['CRPIX1'] as Double
+    def crpix2 = headerFields['CRPIX2'] as Double
+
     def lo1Info  = fieldsInfo['spat_lolimit1']
     def hi1Info  = fieldsInfo['spat_hilimit1']
     def lo2Info  = fieldsInfo['spat_lolimit2']
     def hi2Info  = fieldsInfo['spat_hilimit2']
+    def scale = getValueFor('im_scale', fieldsInfo)
 
-    if (lo1Info && hi1Info && lo2Info && hi2Info) {  // sanity check all vars
+    if ( lo1Info && hi1Info && lo2Info && hi2Info &&  // sanity check all vars
+        (scale != null) && (crpix1 != null) && (crpix2 != null) )
+    {
+      // TODO: IMPLEMENT LATER
+      // NOTE: THIS DATA IS A ROUGH APPROXIMATION FROM ONE IMAGE (UNROTATED!):
+      lo1Info['value'] = 53.073032379136
+      hi1Info['value'] = 53.23755644019293
+      lo2Info['value'] = -27.876356893525543
+      hi2Info['value'] = -27.733551641521288
     }
   }
 
@@ -383,7 +409,7 @@ class JwstProcessor implements IFitsFileProcessor {
       case ['s_ra', 's_dec']:               // coordinate fields extracted from the file
         calcWcsCoords(headerFields, fieldsInfo)
         break
-      case [ 'ra1', 'dec1', 'ra2', 'dec2', 'ra3', 'dec3', 'ra4', 'dec4' ]:
+      case [ 'im_ra1', 'im_dec1', 'im_ra2', 'im_dec2', 'im_ra3', 'im_dec3', 'im_ra4', 'im_dec4' ]:
         calcCorners(headerFields, fieldsInfo)
         break
       case [ 'spat_lolimit1', 'spat_hilimit1', 'spat_lolimit2', 'spat_hilimit2' ]:
