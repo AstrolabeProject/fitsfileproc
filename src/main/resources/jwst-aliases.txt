@@ -91,6 +91,12 @@ OBSERVER, obs_creator_name
 
 
 #
+# DALserver Mandatory
+#
+NAXIS   , im_naxes
+
+
+#
 # JWST-specific fieldnames
 #
 EQUINOX , equinox
