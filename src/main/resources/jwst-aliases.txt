@@ -93,6 +93,8 @@ OBSERVER, obs_creator_name
 #
 # DALserver Mandatory
 #
+CTYPE1  , im_wcsaxes1
+CTYPE2  , im_wcsaxes2
 NAXIS   , im_naxes
 
 

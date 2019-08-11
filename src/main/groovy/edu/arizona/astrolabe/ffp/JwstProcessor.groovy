@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Save scale calculation in DALserver field. Fake corners and spatial limits.
+ *   Last Modified: Handle filling of im_naxis1/2 via copyValue. Add null check to hasValue.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -415,6 +415,10 @@ class JwstProcessor implements IFitsFileProcessor {
       case [ 'spat_lolimit1', 'spat_hilimit1', 'spat_lolimit2', 'spat_hilimit2' ]:
         calcSpatialLimits(headerFields, fieldsInfo)
         break
+      case [ 'im_naxis1', 'im_naxis2' ]:
+        copyValue('s_xel1', 'im_naxis1', fieldsInfo) // s_xel1 already filled by aliasing
+        copyValue('s_xel2', 'im_naxis2', fieldsInfo) // s_xel2 already filled by aliasing
+        break
       case 'access_estsize':                // estimated size is the size of the file
         def fileInfo = fieldsInfo[IInformationOutputter.FILE_INFO_KEYWORD]
         if (fileInfo && fileInfo['fileSize'])
@@ -425,6 +429,24 @@ class JwstProcessor implements IFitsFileProcessor {
         String instName = (module != null) ? "NIRCam-${module}" : "NIRCam"
         fieldInfo['value'] = instName
         break
+    }
+  }
+
+
+  /**
+   * Copy the current value from the named field in the given fields information map
+   * to the other named field but only if the "from" field exists and has a value
+   * and the "to" field information already exists. Whether the existing "to" value
+   * is overwritten is determined by the value of the overwrite field (default true).
+   */
+  private void copyValue (String fromKey, String toKey, Map fieldsInfo, boolean overwrite=true) {
+    log.trace("(JwstProcessor.copyValue): from=${fromKey}, to=${toKey}, fieldsInfo=${fieldsInfo}, overwrite=${overwrite}")
+    def toField = fieldsInfo.get(toKey)
+    def fromField = fieldsInfo.get(fromKey)
+    if (hasValue(fromField) && (toField != null)) { // From has a value and To exists
+      if (overwrite || !hasValue(toField)) {        // dont replace value if overwrite is false
+        toField['value'] = fromField['value']
+      }
     }
   }
 
@@ -481,9 +503,9 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
 
-  /** Return true if the given field info map has a data value, else return false. */
+  /** Return true if the given field info is none-null and has a data value, else return false. */
   private boolean hasValue (Map fieldInfo) {
-    return (fieldInfo['value'] != null)
+    return ((fieldInfo != null) && (fieldInfo['value'] != null))
   }
 
   /** Locate the aliases file, load the aliases, and return them. */
