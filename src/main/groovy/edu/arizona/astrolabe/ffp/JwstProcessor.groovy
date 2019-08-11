@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Handle filling of im_naxis1/2 via copyValue. Add null check to hasValue.
+ *   Last Modified: Calculate spatial resolution field.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -33,6 +33,15 @@ class JwstProcessor implements IFitsFileProcessor {
   /** Default resource file for header field information. */
   static final String DEFAULT_FIELDS_FILEPATH = '/jwst-fields.txt'
 
+  /** Spatial resolutions for NIRCam filters, keyed by filter name. */
+  static final Map FILTER_RESOLUTIONS = [
+    'F070W': 0.030, 'F090W': 0.034,  'F115W': 0.040,  'F140M': 0.048, 'F150W': 0.050,
+    'F162M': 0.055, 'F164N': 0.056,  'F150W2': 0.046, 'F182M': 0.062, 'F187N': 0.064,
+    'F200W': 0.066, 'F210M': 0.071,  'F212N': 0.072,  'F250M': 0.084, 'F277W': 0.091,
+    'F300M': 0.100, 'F322W2': 0.097, 'F323N': 0.108,  'F335M': 0.111, 'F356W': 0.115,
+    'F360M': 0.120, 'F405N': 0.136,  'F410M': 0.137,  'F430M': 0.145, 'F444W': 0.145,
+    'F460M': 0.155, 'F466N': 0.158,  'F470N': 0.160,  'F480M': 0.162
+  ]
 
   /** Debug setting: when true, show internal information for debugging. */
   private boolean DEBUG   = false
@@ -307,6 +316,7 @@ class JwstProcessor implements IFitsFileProcessor {
     }
   }
 
+
   // TODO: IMPLEMENT LATER
   private void calcSpatialLimits (Map headerFields, Map fieldsInfo) {
     log.trace("(JwstProcessor.calcSpatialLimits): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
@@ -330,6 +340,24 @@ class JwstProcessor implements IFitsFileProcessor {
       hi2Info['value'] = -27.733551641521288
     }
   }
+
+
+  /**
+   * Use the filter value to determine the spatial resolution based on a NIRCam
+   * filter-resolution table.
+   */
+  private void calcSpatialResolution (Map fieldsInfo) {
+    log.trace("(JwstProcessor.calcSpatialResolution): fieldsInfo=${fieldsInfo}")
+    String filter = getValueFor('filter', fieldsInfo)
+    if (filter) {
+      Double resolution = FILTER_RESOLUTIONS[filter]
+      def fieldInfo = fieldsInfo['s_resolution']
+      if (resolution && (fieldInfo != null)) {
+        fieldInfo['value'] = resolution
+      }
+    }
+  }
+
 
   /**
    * Extract the WCS coordinates for the current file. Sets both s_ra and s_dec fields
@@ -418,6 +446,9 @@ class JwstProcessor implements IFitsFileProcessor {
       case [ 'im_naxis1', 'im_naxis2' ]:
         copyValue('s_xel1', 'im_naxis1', fieldsInfo) // s_xel1 already filled by aliasing
         copyValue('s_xel2', 'im_naxis2', fieldsInfo) // s_xel2 already filled by aliasing
+        break
+      case 's_resolution':
+        calcSpatialResolution(fieldsInfo)
         break
       case 'access_estsize':                // estimated size is the size of the file
         def fileInfo = fieldsInfo[IInformationOutputter.FILE_INFO_KEYWORD]
