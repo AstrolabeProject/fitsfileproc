@@ -53,11 +53,11 @@ s_xel2, integer, true, *
 
 # Time Characterisation (section B.6.3)
 #
-t_xel, integer, true, *
+# t_xel, integer, true, *
 t_min, double, true, *
 t_max, double, true, *
 t_exptime, double, true, *
-t_resolution, double, true, *
+# t_resolution, double, true, *
 
 # Observable Axis (section B.6.4)
 #

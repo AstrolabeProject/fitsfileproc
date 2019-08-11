@@ -60,10 +60,10 @@ _NOP_   , t_xel
 DATE-BEG, t_min
 # for JWST, DATE-OBS is date only, no time
 # DATE-OBS, t_min
+# DATE-END, t_max
 MJD     , t_min
 MJD-OBS , t_min
 TSTART  , t_min
-DATE-END, t_max
 MJD-END , t_max
 TSTOP   , t_max
 EXPTIME , t_exptime
