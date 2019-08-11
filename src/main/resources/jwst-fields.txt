@@ -30,7 +30,7 @@ obs_publisher_did, string, true, FAKE_OBS_PUBLISHER_DID
 
 # Access Information (section B.5)
 #
-access_url, string, true, http://astrolabe.arizona.edu/FAKE/acess_url
+access_url, string, true, *
 access_format, string, true, application/fits
 access_estsize, integer, true, *
 
@@ -53,11 +53,11 @@ s_xel2, integer, true, *
 
 # Time Characterisation (section B.6.3)
 #
-# t_xel, integer, true, *
+t_xel, integer, true, *
 t_min, double, true, *
 t_max, double, true, *
 t_exptime, double, true, *
-# t_resolution, double, true, *
+t_resolution, double, true, *
 
 # Observable Axis (section B.6.4)
 #
@@ -103,6 +103,12 @@ im_nsubarrays, integer, true, 1
 im_pixtype, string, true, double
 im_wcsaxes1, string, true, *
 im_wcsaxes2, string, true, *
+
+#
+# DALserver needed
+#
+file_name, string, true, *
+file_path, string, true, *
 
 #
 # JWST-specific fieldnames

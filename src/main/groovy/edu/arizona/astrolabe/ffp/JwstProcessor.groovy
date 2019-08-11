@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Calculate spatial resolution field.
+ *   Last Modified: Redo file information w/ specific file fields, compute access URL.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -199,12 +199,20 @@ class JwstProcessor implements IFitsFileProcessor {
    */
   private void addFileInformation (File aFile, Map fieldsInfo) {
     log.trace("(JwstProcessor.addFileInformation): aFile=${aFile}, fieldsInfo=${fieldsInfo}")
-    def fileInfoKey = IInformationOutputter.FILE_INFO_KEYWORD
-    def fileInfoMap =[ 'fileName': aFile.getName(),
-                       'filePath': aFile.getAbsolutePath(),
-                       'fileSize': aFile.length() ]
-    fieldsInfo[fileInfoKey] = fileInfoMap
+
+    def fnameInfo = fieldsInfo['file_name']
+    if (fnameInfo != null)
+      fnameInfo['value'] = aFile.getName()
+
+    def fpathInfo = fieldsInfo['file_path']
+    if (fpathInfo != null)
+      fpathInfo['value'] = aFile.getAbsolutePath()
+
+    def fsizeInfo = fieldsInfo['access_estsize'] // estimated size is the size of the file
+    if (fsizeInfo != null)
+      fsizeInfo['value'] = aFile.length()
   }
+
 
   /**
    * For the given map of FITS file header fields, find the corresponding ObsCore keyword,
@@ -289,6 +297,7 @@ class JwstProcessor implements IFitsFileProcessor {
       fieldsInfo['im_dec4']['value'] = -27.74262709 // UL
     }
   }
+
 
   /**
    * Calculate the plate scale (arcsec/pixel) for the current image using the given
@@ -450,10 +459,10 @@ class JwstProcessor implements IFitsFileProcessor {
       case 's_resolution':
         calcSpatialResolution(fieldsInfo)
         break
-      case 'access_estsize':                // estimated size is the size of the file
-        def fileInfo = fieldsInfo[IInformationOutputter.FILE_INFO_KEYWORD]
-        if (fileInfo && fileInfo['fileSize'])
-          fieldInfo['value'] = fileInfo['fileSize']
+      case 'access_url':                    // use filepath for now (TODO: ENHANCE LATER)
+        def filepath = getValueFor('file_path', fieldsInfo)
+        if (filepath != null)
+          fieldInfo['value'] = "file://${filepath}" as String
         break
       case 'instrument_name':               // NIRCam + MODULE value
         def module = getValueFor('nircam_module', fieldsInfo)
@@ -600,7 +609,7 @@ class JwstProcessor implements IFitsFileProcessor {
     else                                    // else fallback to default resource
       fieldStream = this.getClass().getResourceAsStream(DEFAULT_FIELDS_FILEPATH);
 
-    if (VERBOSE)
+    if (DEBUG)
       log.info("(JwstProcessor.loadFieldsInfo): Reading field information from: ${fieldsFilepath}")
 
     def numInfoFields = fieldInfoColumnNames.size() // to avoid recomputation in loop
@@ -626,7 +635,7 @@ class JwstProcessor implements IFitsFileProcessor {
       }
     }
 
-    if (VERBOSE)
+    if (DEBUG)
       log.info("(JwstProcessor.loadFieldsInfo): Read ${recCnt} field information records.")
 
     return fields

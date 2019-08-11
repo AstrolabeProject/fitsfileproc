@@ -7,7 +7,7 @@ import org.apache.logging.log4j.*
  * Class to implement general output methods for the Astrolabe FITS File Processor project.
  *
  *   Written by: Tom Hicks. 8/5/2019.
- *   Last Modified: Fix: add SQL command terminator.
+ *   Last Modified: Update for file information w/ specific file fields.
  */
 class InformationOutputter implements IInformationOutputter {
   static final Logger log = LogManager.getLogger(InformationOutputter.class.getName());
@@ -67,18 +67,27 @@ class InformationOutputter implements IInformationOutputter {
   /** Return a string containing information about the input file formatted as a comment. */
   private String makeFileInfo (Map fieldsInfo) {
     log.trace("(InformationOutputter.makeFileInfo): fieldsInfo=${fieldsInfo}")
+
     StringBuffer buf = new StringBuffer()
-    def fileInfo = fieldsInfo[IInformationOutputter.FILE_INFO_KEYWORD]
-    if (fileInfo) {
-      if (outputFormat == 'sql') {
-        buf.append("${SQL_COMMENT} ")
-        buf.append(fileInfo?.fileName)
+    def fnameInfo = fieldsInfo['file_name']
+    def fpathInfo = fieldsInfo['file_path']
+    def fsizeInfo = fieldsInfo['access_estsize'] // estimated size is the size of the file
+
+    if (outputFormat == 'sql') {
+      buf.append("${SQL_COMMENT} ")
+      if (fnameInfo != null) {
+        buf.append(fnameInfo?.value)
         buf.append(' ')
-        buf.append(fileInfo?.fileSize)
+      }
+      if (fsizeInfo != null) {
+        buf.append(fsizeInfo?.value)
         buf.append(' ')
-        buf.append(fileInfo?.filePath)
+      }
+      if (fpathInfo != null) {
+        buf.append(fpathInfo?.value)
       }
     }
+
     return buf.toString()
   }
 
