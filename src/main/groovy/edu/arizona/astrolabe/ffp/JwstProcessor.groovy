@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Redo file information w/ specific file fields, compute access URL.
+ *   Last Modified: Calculate the im_pixtype field. Update fake spatial limits.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -42,6 +42,11 @@ class JwstProcessor implements IFitsFileProcessor {
     'F360M': 0.120, 'F405N': 0.136,  'F410M': 0.137,  'F430M': 0.145, 'F444W': 0.145,
     'F460M': 0.155, 'F466N': 0.158,  'F470N': 0.160,  'F480M': 0.162
   ]
+
+  static final Map PIXTYPE_TABLE = [
+    "8": "byte", "16": "short", "32": "int", "64": "long", "-32": "float", "-64": "double"
+  ]
+
 
   /** Debug setting: when true, show internal information for debugging. */
   private boolean DEBUG   = false
@@ -326,6 +331,20 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
 
+  /**
+   * Calculate the value string for the ObsCore im_pixeltype field based on the value
+   * of the FITS BITPIX keyword.
+   */
+  private void calcPixtype (Map headerFields, Map fieldsInfo) {
+    log.trace("(JwstProcessor.calcPixtype): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
+    def bitpix = headerFields['BITPIX']
+    def ptInfo = fieldsInfo['im_pixtype']
+    if (bitpix && ptInfo) {
+      ptInfo['value'] = PIXTYPE_TABLE.get(bitpix, 'UNKNOWN')
+    }
+  }
+
+
   // TODO: IMPLEMENT LATER
   private void calcSpatialLimits (Map headerFields, Map fieldsInfo) {
     log.trace("(JwstProcessor.calcSpatialLimits): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
@@ -343,10 +362,10 @@ class JwstProcessor implements IFitsFileProcessor {
     {
       // TODO: IMPLEMENT LATER
       // NOTE: THIS DATA IS A ROUGH APPROXIMATION FROM ONE IMAGE (UNROTATED!):
-      lo1Info['value'] = 53.073032379136
-      hi1Info['value'] = 53.23755644019293
-      lo2Info['value'] = -27.876356893525543
-      hi2Info['value'] = -27.733551641521288
+      lo1Info['value'] = 53.097374
+      hi1Info['value'] = 53.249308
+      lo2Info['value'] = -27.859228
+      hi2Info['value'] = -27.742627
     }
   }
 
@@ -458,6 +477,9 @@ class JwstProcessor implements IFitsFileProcessor {
         break
       case 's_resolution':
         calcSpatialResolution(fieldsInfo)
+        break
+      case 'im_pixtype':
+        calcPixtype(headerFields, fieldsInfo)
         break
       case 'access_url':                    // use filepath for now (TODO: ENHANCE LATER)
         def filepath = getValueFor('file_path', fieldsInfo)

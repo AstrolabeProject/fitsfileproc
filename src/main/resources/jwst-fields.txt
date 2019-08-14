@@ -100,7 +100,7 @@ im_naxes, integer, true, 2
 im_naxis1, integer, true, *
 im_naxis2, integer, true, *
 im_nsubarrays, integer, true, 1
-im_pixtype, string, true, double
+im_pixtype, string, true, *
 im_wcsaxes1, string, true, *
 im_wcsaxes2, string, true, *
 
