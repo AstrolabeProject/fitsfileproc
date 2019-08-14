@@ -15,6 +15,7 @@ repositories {
 def groovyVersion = "2.5.7"
 
 dependencies {
+  // implementation 'org.opencadc:cadc-wcs:2.0'
   implementation "org.codehaus.groovy:groovy:${groovyVersion}"
   // implementation "org.codehaus.groovy:groovy-json:${groovyVersion}"
   implementation "org.codehaus.groovy:groovy-cli-commons:${groovyVersion}"
@@ -30,13 +31,14 @@ dependencies {
 //   groovyOptions.configurationScript = file("src/conf/config.groovy")
 // }
 
-version = '0.0.11'
+version = '0.0.14'
 mainClassName = 'edu.arizona.astrolabe.ffp.FitsFileProcessor'
 sourceCompatibility = 1.8
 
 shadowJar {
   manifest {
-    archiveName = "${rootProject.name}-${version}.jar"
+    // archiveName = "${rootProject.name}-${version}.jar"
+    archiveName = "fitsfileprocessor.jar"
     mergeServiceFiles()
     attributes('Project-Version': version,
                'Built-By': System.getProperty('user.name'),
