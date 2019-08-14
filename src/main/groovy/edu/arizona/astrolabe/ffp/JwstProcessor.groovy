@@ -84,7 +84,7 @@ class JwstProcessor implements IFitsFileProcessor {
 
 
   /** Process the single given file. */
-  int processAFile (File aFile) {
+  public int processAFile (File aFile) {
     log.trace("(JwstProcessor.processAFile): aFile=${aFile}")
 
     Fits fits = readFitsFile(aFile)         // make FITS object from given FITS file

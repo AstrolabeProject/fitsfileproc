@@ -13,8 +13,7 @@ import groovy.transform.InheritConstructors
  *   This class parses and validates its arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Move file info keyword constant to the IInformationOutputter interface.
- *                  Remove to* methods and add output information method to interface.
+ *   Last Modified: Add an output directory argument for writing results to.
  */
 class FitsFileProcessor {
 
@@ -29,7 +28,7 @@ class FitsFileProcessor {
   public static void main (String[] args) {
 
     // read, parse, and validate command line arguments
-    def usage = 'java -jar ffp.jar [-h] [-a aliases-file] [-f output-format] [-i info-file] [-t processor-type] (FITS-file|FITS-directory)..'
+    def usage = 'java -jar ffp.jar [-h] [-a aliases-file] [-f output-format] [-i info-file] [-t processor-type] [-o output-dir] (FITS-file|FITS-directory)..'
     def cli = new CliBuilder(usage: usage)
     cli.width = 100                         // increase usage message width
     cli.with {
@@ -42,6 +41,8 @@ class FitsFileProcessor {
       h(longOpt: 'help',     'Show usage information.')
       i(longOpt: 'info',    args:1, argName: 'filepath',
         'File listing information on fields to be processed [default: "jwst-fields"].')
+      o(longOpt: 'outdir',  args:1, argName: 'outdir',
+        'Writeable directory in which to write the generated output file [default: "$PWD/out"].')
       t(longOpt: 'type',    args:1, argName: 'processor-type',
         'Which processor type to use [default: "jwst"]')
       v(longOpt: 'verbose',  'Run in verbose mode [default: non verbose mode].')
@@ -73,8 +74,17 @@ class FitsFileProcessor {
     // if an external fields information filepath is given, check that it exists and is readable
     File fieldsFile = validateFieldsFilepath(options.i ?: null)
 
+    // check that the given (or default) output directory exists and is writable
+    def outputDir = options.o ?: 'out'
+    if (!FileUtils.goodDirPath(outputDir, true)) {    // test for writable directory
+      System.err.println(
+        "ERROR: Directory '${outputDir}' must exist and be writable. Exiting...")
+      System.exit(4)
+    }
+
     // instantiate a specialized processor with the specified settings
-    def settings = [ 'DEBUG': DEBUG, 'VERBOSE': VERBOSE, 'outputFormat': outputFormat ]
+    def settings = [ 'DEBUG': DEBUG, 'VERBOSE': VERBOSE,
+                     'outputDir': outputDir, 'outputFormat': outputFormat ]
     if (aliasFile)
       settings << [ 'aliasFile': aliasFile ]
     if (fieldsFile)
@@ -102,7 +112,7 @@ class FitsFileProcessor {
       if (! path instanceof java.io.File) {
         System.err.println(
           "ERROR: Found validated path '${path}' which is neither a file nor a directory. Exiting...")
-        System.exit(4)
+        System.exit(5)
       }
       if (path.isDirectory()) {
         if (VERBOSE)
@@ -116,8 +126,6 @@ class FitsFileProcessor {
       }
       else {  /** should not happen so ignore the invalid path */ }
     }
-
-    // processor.exit()                           // do any processor instance cleanup
 
     if (VERBOSE)
       log.info("(FitsFileProcessor.main): Processed ${procCount} FITS files.")
@@ -235,9 +243,6 @@ class FitsFileProcessor {
 interface IFitsFileProcessor {
   /** Process the single given file. */
   int processAFile (File aFile);
-
-  /** Do any needed processor instance cleanup. */
-  // void exit()
 }
 
 

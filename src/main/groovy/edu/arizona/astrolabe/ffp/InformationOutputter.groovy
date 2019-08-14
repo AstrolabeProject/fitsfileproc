@@ -1,13 +1,14 @@
 package edu.arizona.astrolabe.ffp
 
 import java.io.*
+import java.text.SimpleDateFormat
 import org.apache.logging.log4j.*
 
 /**
  * Class to implement general output methods for the Astrolabe FITS File Processor project.
  *
  *   Written by: Tom Hicks. 8/5/2019.
- *   Last Modified: Update for file information w/ specific file fields.
+ *   Last Modified: Write results to a generated file in the (new) output directory.
  */
 class InformationOutputter implements IInformationOutputter {
   static final Logger log = LogManager.getLogger(InformationOutputter.class.getName());
@@ -27,6 +28,9 @@ class InformationOutputter implements IInformationOutputter {
   /** Configuration parameters given to this class in the constructor. */
   private Map config
 
+  /** An output file created within the output directory. */
+  private File outputFile = null
+
   /** A string specifying the output. */
   private String outputFormat = 'sql'
 
@@ -41,20 +45,37 @@ class InformationOutputter implements IInformationOutputter {
     DEBUG = configuration.DEBUG ?: false
     VERBOSE = configuration.VERBOSE ?: false
     outputFormat = configuration?.outputFormat
+    def outputDir = configuration.outputDir ?: 'out'
+    outputFile = new File(genOutputFilePath(outputDir))
   }
 
   /** Output the given field information using the current output settings. */
   void outputInformation (Map fieldsInfo) {
-    println(makeFileInfo(fieldsInfo))
-    println(makeDataLine(fieldsInfo))
-    // TODO: ENHANCE IMPLEMENTATION
+    if (outputFormat in ['sql', 'json']) {
+      outputFile.append(makeFileInfo(fieldsInfo))
+      outputFile.append('\n')
+      outputFile.append(makeDataLine(fieldsInfo))
+      outputFile.append('\n')
+    }
   }
 
   /** Load the given field information directly into a PostgreSQL database. */
   void intoPostgres (Map fieldsInfo) {
+    // TODO: IMPLEMENT LATER
   }
 
 
+  /**
+   * Return a unique output filepath, within the specified directory, for the result file.
+   */
+  private String genOutputFilePath (String outputDir) {
+    def sdf = new SimpleDateFormat("yyyyMMdd_HHmmss-SSS")
+    def now = sdf.format(new Date())
+    return "${outputDir}/ffp-${now}.${outputFormat}"
+  }
+
+
+  /** Return a string which formats the given field information. */
   private String makeDataLine (Map fieldsInfo) {
     log.trace("(InformationOutputter.makeDataLine): fieldsInfo=${fieldsInfo}")
     if (outputFormat == 'sql') {
@@ -87,6 +108,7 @@ class InformationOutputter implements IInformationOutputter {
         buf.append(fpathInfo?.value)
       }
     }
+    // TODO: handle JSON
 
     return buf.toString()
   }
