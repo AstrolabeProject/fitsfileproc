@@ -1,0 +1,8 @@
+.git
+build.gradle
+Dockerfile
+docker-compose.yml
+data
+Makefile
+out
+SAVE
