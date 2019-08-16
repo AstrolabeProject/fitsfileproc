@@ -1,6 +1,7 @@
 BUILDLIB = build/libs
 JARNAME = fitsfileprocessor.jar
 BUILDJAR = $(BUILDLIB)/$(JARNAME)
+GSRC = src/main/groovy/edu/arizona/astrolabe/ffp/*.groovy
 
 .PHONY: help clean build gen jar exec watch reset
 
@@ -41,7 +42,7 @@ watch:
 
 jar: $(BUILDJAR)
 
-$(BUILDJAR):
+$(BUILDJAR): $(GSRC)
 	gradle clean build
 
 %:
