@@ -10,7 +10,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Calculate the im_pixtype field. Update fake spatial limits.
+ *   Last Modified: Calculate the spatial_limits from the corners.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -287,8 +287,7 @@ class JwstProcessor implements IFitsFileProcessor {
   // TODO: IMPLEMENT LATER
   private void calcCorners (Map headerFields, Map fieldsInfo) {
     log.trace("(JwstProcessor.calcCorners): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
-    // TODO: IMPLEMENT LATER
-    // NOTE: THIS CONSTANT DATA IS CALCULATED FROM ONE IMAGE:
+    // NOTE: IMPLEMENT LATER: THIS CONSTANT DATA IS FAKED FROM ONE IMAGE:
     if (['im_ra1','im_dec1', 'im_ra2','im_dec2',
          'im_ra3','im_dec3', 'im_ra4','im_dec4'].collect{fieldsInfo[it]}.every{it})
     {
@@ -300,6 +299,9 @@ class JwstProcessor implements IFitsFileProcessor {
       fieldsInfo['im_dec3']['value'] = -27.74263653 // UR
       fieldsInfo['im_ra4']['value']  = 53.24921734  // UL
       fieldsInfo['im_dec4']['value'] = -27.74262709 // UL
+
+      // now use the corners to calculate the min/max spatial limits of the image
+      calcSpatialLimits(headerFields, fieldsInfo)
     }
   }
 
@@ -345,27 +347,25 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
 
-  // TODO: IMPLEMENT LATER
+  /**
+   * Calculate the min/max of the RA and DEC axes. This method must be called after the
+   * image corners are computed, since it relies on those values.
+   */
   private void calcSpatialLimits (Map headerFields, Map fieldsInfo) {
     log.trace("(JwstProcessor.calcSpatialLimits): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
-    def crpix1 = headerFields['CRPIX1'] as Double
-    def crpix2 = headerFields['CRPIX2'] as Double
-
     def lo1Info  = fieldsInfo['spat_lolimit1']
     def hi1Info  = fieldsInfo['spat_hilimit1']
     def lo2Info  = fieldsInfo['spat_lolimit2']
     def hi2Info  = fieldsInfo['spat_hilimit2']
-    def scale = getValueFor('im_scale', fieldsInfo)
 
-    if ( lo1Info && hi1Info && lo2Info && hi2Info &&  // sanity check all vars
-        (scale != null) && (crpix1 != null) && (crpix2 != null) )
-    {
-      // TODO: IMPLEMENT LATER
-      // NOTE: THIS DATA IS A ROUGH APPROXIMATION FROM ONE IMAGE (UNROTATED!):
-      lo1Info['value'] = 53.097374
-      hi1Info['value'] = 53.249308
-      lo2Info['value'] = -27.859228
-      hi2Info['value'] = -27.742627
+    if (lo1Info && hi1Info && lo2Info && hi2Info) {  // sanity check all vars
+      def ras = ['im_ra1', 'im_ra2', 'im_ra3', 'im_ra4'].collect{getValueFor(it, fieldsInfo)}
+      def decs = ['im_dec1', 'im_dec2', 'im_dec3', 'im_dec4'].collect{getValueFor(it, fieldsInfo)}
+
+      lo1Info['value'] = ras.min()
+      hi1Info['value'] = ras.max()
+      lo2Info['value'] = decs.min()
+      hi2Info['value'] = decs.max()
     }
   }
 
@@ -467,9 +467,6 @@ class JwstProcessor implements IFitsFileProcessor {
         break
       case [ 'im_ra1', 'im_dec1', 'im_ra2', 'im_dec2', 'im_ra3', 'im_dec3', 'im_ra4', 'im_dec4' ]:
         calcCorners(headerFields, fieldsInfo)
-        break
-      case [ 'spat_lolimit1', 'spat_hilimit1', 'spat_lolimit2', 'spat_hilimit2' ]:
-        calcSpatialLimits(headerFields, fieldsInfo)
         break
       case [ 'im_naxis1', 'im_naxis2' ]:
         copyValue('s_xel1', 'im_naxis1', fieldsInfo) // s_xel1 already filled by aliasing
