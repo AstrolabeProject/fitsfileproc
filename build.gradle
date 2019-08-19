@@ -14,6 +14,11 @@ repositories {
 
 def groovyVersion = "2.5.7"
 
+def whichLib = 'cadc-wcs-2.0_linux.jar'
+def whichOS = System.getProperty('os.name').toLowerCase()
+if (whichOS.contains('os x'))
+  whichLib = 'cadc-wcs-2.1_darwin.jar'
+
 dependencies {
   implementation "org.codehaus.groovy:groovy:${groovyVersion}"
   // implementation "org.codehaus.groovy:groovy-json:${groovyVersion}"
@@ -21,10 +26,7 @@ dependencies {
   implementation 'org.apache.logging.log4j:log4j-core:2.12.0'
   implementation 'org.apache.logging.log4j:log4j-api:2.12.0'
   implementation 'gov.nasa.gsfc.heasarc:nom-tam-fits:1.15.2'
-  if (project.hasProperty('linux'))
-    implementation fileTree(dir: 'libs', include: 'cadc-wcs-2.0_linux.jar')
-  else
-    implementation fileTree(dir: 'libs', include: 'cadc-wcs-2.1_darwin.jar')
+  implementation fileTree(dir: 'libs', include: whichLib)
   testCompile 'junit:junit'
 }
 
