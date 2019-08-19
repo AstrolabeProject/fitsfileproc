@@ -15,7 +15,6 @@ repositories {
 def groovyVersion = "2.5.7"
 
 dependencies {
-  // implementation 'org.opencadc:cadc-wcs:2.0'
   implementation "org.codehaus.groovy:groovy:${groovyVersion}"
   // implementation "org.codehaus.groovy:groovy-json:${groovyVersion}"
   implementation "org.codehaus.groovy:groovy-cli-commons:${groovyVersion}"
