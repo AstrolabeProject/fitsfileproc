@@ -8,7 +8,7 @@ import org.apache.logging.log4j.*
  * Class to implement general output methods for the Astrolabe FITS File Processor project.
  *
  *   Written by: Tom Hicks. 8/5/2019.
- *   Last Modified: Write results to a generated file in the (new) output directory.
+ *   Last Modified: Refactor for new field information structures.
  */
 class InformationOutputter implements IInformationOutputter {
   static final Logger log = LogManager.getLogger(InformationOutputter.class.getName());
@@ -50,7 +50,7 @@ class InformationOutputter implements IInformationOutputter {
   }
 
   /** Output the given field information using the current output settings. */
-  void outputInformation (Map fieldsInfo) {
+  void outputInformation (FieldsInfo fieldsInfo) {
     if (outputFormat in ['sql', 'json']) {
       outputFile.append(makeFileInfo(fieldsInfo))
       outputFile.append('\n')
@@ -60,7 +60,7 @@ class InformationOutputter implements IInformationOutputter {
   }
 
   /** Load the given field information directly into a PostgreSQL database. */
-  void intoPostgres (Map fieldsInfo) {
+  void intoPostgres (FieldsInfo fieldsInfo) {
     // TODO: IMPLEMENT LATER
   }
 
@@ -76,7 +76,7 @@ class InformationOutputter implements IInformationOutputter {
 
 
   /** Return a string which formats the given field information. */
-  private String makeDataLine (Map fieldsInfo) {
+  private String makeDataLine (FieldsInfo fieldsInfo) {
     log.trace("(InformationOutputter.makeDataLine): fieldsInfo=${fieldsInfo}")
     if (outputFormat == 'sql') {
       return toSQL(fieldsInfo)
@@ -86,26 +86,26 @@ class InformationOutputter implements IInformationOutputter {
 
 
   /** Return a string containing information about the input file formatted as a comment. */
-  private String makeFileInfo (Map fieldsInfo) {
+  private String makeFileInfo (FieldsInfo fieldsInfo) {
     log.trace("(InformationOutputter.makeFileInfo): fieldsInfo=${fieldsInfo}")
 
     StringBuffer buf = new StringBuffer()
-    def fnameInfo = fieldsInfo['file_name']
-    def fpathInfo = fieldsInfo['file_path']
-    def fsizeInfo = fieldsInfo['access_estsize'] // estimated size is the size of the file
+    def fnameInfo = fieldsInfo.get('file_name')
+    def fpathInfo = fieldsInfo.get('file_path')
+    def fsizeInfo = fieldsInfo.get('access_estsize') // estimated size is the size of the file
 
     if (outputFormat == 'sql') {
       buf.append("${SQL_COMMENT} ")
       if (fnameInfo != null) {
-        buf.append(fnameInfo?.value)
+        buf.append(fnameInfo?.getValue())
         buf.append(' ')
       }
       if (fsizeInfo != null) {
-        buf.append(fsizeInfo?.value)
+        buf.append(fsizeInfo?.getValue())
         buf.append(' ')
       }
       if (fpathInfo != null) {
-        buf.append(fpathInfo?.value)
+        buf.append(fpathInfo?.getValue())
       }
     }
     // TODO: handle JSON
@@ -114,15 +114,10 @@ class InformationOutputter implements IInformationOutputter {
   }
 
 
-  /** Return true if the given field info map has a data value, else return false. */
-  private boolean hasValue (Map fieldInfo) {
-    return (fieldInfo['value'] != null)
-  }
-
   /** Return the given file information formatted as an SQL string. */
-  private String toSQL (Map fieldsInfo) {
+  private String toSQL (FieldsInfo fieldsInfo) {
     log.trace("(InformationOutputter.toSQL): fieldsInfo=${fieldsInfo}")
-    def valued = fieldsInfo.findAll { key, fieldInfo -> hasValue(fieldInfo) }
+    def valued = fieldsInfo.findAll { key, fieldInfo -> fieldInfo.hasValue() }
     def keys = valued.keySet().join(', ')
     def vals = valued.values().collect{it['value']}
     def values = vals.collect {(it instanceof String) ? "'${it}'" : it}.join(', ')
@@ -130,8 +125,23 @@ class InformationOutputter implements IInformationOutputter {
   }
 
   /** Return the given file information formatted as a JSON string. */
-  private String toJSON (Map fieldsInfo) {
+  private String toJSON (FieldsInfo fieldsInfo) {
     log.trace("(InformationOutputter.toJSON): fieldsInfo=${fieldsInfo}")
   }
 
+}
+
+
+/**
+ * Interface specifying behavior for classes which output information derived from FITS files.
+ */
+interface IInformationOutputter {
+  /** The special keyword for input file information in the field information map. */
+  static final String FILE_INFO_KEYWORD = '_FILE_INFO_'
+
+  /** Output the given field information using the current output settings. */
+  void outputInformation (FieldsInfo fieldsInfo);
+
+  /** Load the given field information directly into a PostgreSQL database. */
+  void intoPostgres (FieldsInfo fieldsInfo);
 }

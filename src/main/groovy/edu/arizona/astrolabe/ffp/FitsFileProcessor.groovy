@@ -13,7 +13,7 @@ import groovy.transform.InheritConstructors
  *   This class parses and validates its arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Add an output directory argument for writing results to.
+ *   Last Modified: Refactor information outputter interface to default information outputter.
  */
 class FitsFileProcessor {
 
@@ -243,21 +243,6 @@ class FitsFileProcessor {
 interface IFitsFileProcessor {
   /** Process the single given file. */
   int processAFile (File aFile);
-}
-
-
-/**
- * Interface specifying behavior for classes which output information derived from FITS files.
- */
-interface IInformationOutputter {
-  /** The special keyword for input file information in the field information map. */
-  static final String FILE_INFO_KEYWORD = '_FILE_INFO_'
-
-  /** Output the given field information using the current output settings. */
-  void outputInformation (Map fieldsInfo);
-
-  /** Load the given field information directly into a PostgreSQL database. */
-  void intoPostgres (Map fieldsInfo);
 }
 
 

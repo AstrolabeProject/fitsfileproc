@@ -13,7 +13,7 @@ import ca.nrc.cadc.wcs.Transform.Result
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Implement corner coords using WCSlib.
+ *   Last Modified: Refactor for new field information structures.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -70,6 +70,9 @@ class JwstProcessor implements IFitsFileProcessor {
   /** An instance of IInformationOutputter for outputting the processed information. */
   private IInformationOutputter infoOutputter
 
+  /** An instance of the field information factory. */
+  private FieldsInfoFactory fieldsInfoFactory
+
 
   /** Public constructor taking a map of configuration settings. */
   public JwstProcessor (configuration) {
@@ -83,6 +86,13 @@ class JwstProcessor implements IFitsFileProcessor {
     // if (DEBUG)
     //   fitsAliases.each { entry -> System.err.println("${entry.key}=${entry.value}") }
     infoOutputter = new InformationOutputter(configuration)
+
+    // add some processor-specific settings to the configuration file
+    config << [ 'fieldInfoColumnNames': ['obsCoreKey', 'datatype', 'required', 'default'] ]
+    config << [ 'defaultFieldsFilepath': '/jwst-fields.txt' ]
+
+    // instantiate a factory to load field information
+    fieldsInfoFactory = new FieldsInfoFactory(config)
   }
 
 
@@ -97,10 +107,10 @@ class JwstProcessor implements IFitsFileProcessor {
     if (VERBOSE)
       log.info("(JwstProcessor.processAFile): Processing FITS file '${aFile.getAbsolutePath()}'")
 
-    // Map defining information for fields processed by this processor.
+    // Data structure defining information for fields processed by this processor.
     // Loads the field information from a given file or a default resource path.
     // NOTE: need to reload this for each file as it will be mutated for each file:
-    Map fieldsInfo = loadFieldsInfo(config.fieldsFile)
+    FieldsInfo fieldsInfo = fieldsInfoFactory.loadFieldsInfo(config.fieldsFile)
 
     Header header = fits.getHDU(0).getHeader() // get the header from the primary HDU
     Map headerFields = getHeaderFields(fits)   // get a map of all FITS headers and value strings
@@ -122,7 +132,7 @@ class JwstProcessor implements IFitsFileProcessor {
       addInfoFromFitsHeaders(headerFields, fieldsInfo)
 
       // convert the header field string values, where possible
-      addValuesForFields(fieldsInfo)
+      convertHeaderValues(fieldsInfo)
 
       // add defaults for missing values, if possible
       addDefaultValuesForFields(fieldsInfo)
@@ -145,7 +155,7 @@ class JwstProcessor implements IFitsFileProcessor {
     catch (AbortFileProcessingException afpx) {
       def msg =
         "Failed to process file '${aFile.getAbsolutePath()}'. Error message was:\n${afpx.message}"
-      logError('JwstProcessor.processAFile', msg)
+      Utils.logError('JwstProcessor.processAFile', msg)
       return 0                              // signal failure to process the file
     }
 
@@ -157,10 +167,10 @@ class JwstProcessor implements IFitsFileProcessor {
    * Try to instantiate a default value of the correct type for each field in the given
    * fields map which does not already have a value.
    */
-  private void addDefaultValuesForFields (Map fieldsInfo) {
+  private void addDefaultValuesForFields (FieldsInfo fieldsInfo) {
     log.trace("(JwstProcessor.addDefaultValuesForFields): fieldsInfo=${fieldsInfo}")
     fieldsInfo.each { key, fieldInfo ->
-      if (!hasValue(fieldInfo)) {           // do not replace existing values
+      if (!fieldInfo.hasValue()) {          // do not replace existing values
         addDefaultValueForAField(fieldInfo)
       }
     }
@@ -172,9 +182,9 @@ class JwstProcessor implements IFitsFileProcessor {
    * added back to the field information. Ignores field information maps which
    * have a "no default value" marker.
    */
-  private void addDefaultValueForAField (Map fieldInfo) {
+  private void addDefaultValueForAField (FieldInfo fieldInfo) {
     log.trace("(JwstProcessor.addDefaultValueForAField): fieldInfo=${fieldInfo}")
-    if (hasValue(fieldInfo))                // do not replace existing values
+    if (fieldInfo.hasValue())               // do not replace existing values
       return                                // exit out now
 
     def defaultStr = fieldInfo['default']   // get default string value
@@ -191,18 +201,18 @@ class JwstProcessor implements IFitsFileProcessor {
     catch (NumberFormatException nfe) {     // MUST catch before parent exception below
       def obsCoreKey = fieldInfo['obsCoreKey']
       def msg = "Unable to convert default value '${defaultStr}' for field '${obsCoreKey}' to '${datatype}'. Field value not set."
-      logError('JwstProcessor.addDefaultValueForAField', msg)
+      Utils.logError('JwstProcessor.addDefaultValueForAField', msg)
       value = null
     }
     catch (IllegalArgumentException iax) {
       def obsCoreKey = fieldInfo['obsCoreKey']
       def msg = "Unknown datatype '${datatype}' for field '${obsCoreKey}'. Field value not set."
-      logError('JwstProcessor.addDefaultValueForAField', msg)
+      Utils.logError('JwstProcessor.addDefaultValueForAField', msg)
       value = null
     }
 
     if (value != null)                      // if we extracted a value
-      fieldInfo['value'] = value            // then save extracted value in the field info map
+      fieldInfo.setValue(value)             // then save extracted value in the field info map
   }
 
 
@@ -210,20 +220,21 @@ class JwstProcessor implements IFitsFileProcessor {
    * Add information about the given input file to the field information map keyed with
    * a special keyword that is shared with other modules.
    */
-  private void addFileInformation (File aFile, Map fieldsInfo) {
+  private void addFileInformation (File aFile, FieldsInfo fieldsInfo) {
     log.trace("(JwstProcessor.addFileInformation): aFile=${aFile}, fieldsInfo=${fieldsInfo}")
 
-    def fnameInfo = fieldsInfo['file_name']
+    def fnameInfo = fieldsInfo.get('file_name')
     if (fnameInfo != null)
-      fnameInfo['value'] = aFile.getName()
+      fnameInfo.setValue(aFile.getName())
 
-    def fpathInfo = fieldsInfo['file_path']
+    def fpathInfo = fieldsInfo.get('file_path')
     if (fpathInfo != null)
-      fpathInfo['value'] = aFile.getAbsolutePath()
+      fpathInfo.setValue(aFile.getAbsolutePath())
 
-    def fsizeInfo = fieldsInfo['access_estsize'] // estimated size is the size of the file
+    // estimated size is the size of the file
+    def fsizeInfo = fieldsInfo.get('access_estsize')
     if (fsizeInfo != null)
-      fsizeInfo['value'] = aFile.length()
+      fsizeInfo.setValue(aFile.length())
   }
 
 
@@ -232,12 +243,12 @@ class JwstProcessor implements IFitsFileProcessor {
    * if any, and lookup the field information for that key. If found, add the corresponding
    * FITS file header keyword and value string.
    */
-  private void addInfoFromFitsHeaders (Map headerFields, Map fieldsInfo) {
+  private void addInfoFromFitsHeaders (Map headerFields, FieldsInfo fieldsInfo) {
     log.trace("(JwstProcessor.addInfoFromFitsHeaders): headerFields=${headerFields}")
     headerFields.each { hdrKey, hdrValueStr ->
       def obsCoreKey = getObsCoreKeyFromAlias(hdrKey) // map header key to ObsCore key
       if (obsCoreKey) {                               // if found alias mapping
-        def fieldInfo = fieldsInfo[obsCoreKey]
+        def fieldInfo = fieldsInfo.get(obsCoreKey)
         if (fieldInfo) {                    // if we have this ObsCore field, add header info
           fieldInfo << [ "hdrKey": hdrKey, "hdrValueStr": hdrValueStr ]
         }
@@ -247,57 +258,11 @@ class JwstProcessor implements IFitsFileProcessor {
 
 
   /**
-   * Try to fetch a value of the correct type for each field in the given fields map.
-   * If found, a field value is added back to the corresponding field information.
-   */
-  private void addValuesForFields (Map fieldsInfo) {
-    log.trace("(JwstProcessor.findValuesForFields): fieldsInfo=${fieldsInfo}")
-    fieldsInfo.each { key, fieldInfo ->
-      addValueForAField(fieldInfo)
-    }
-  }
-
-  /**
-   * Try to create a value of the correct type for the given field information map.
-   * Tries to convert the header value string to the proper datatype. If successful,
-   * the value is added back to the field information.
-   */
-  private void addValueForAField (Map fieldInfo) {
-    log.trace("(JwstProcessor.addValueForAField): fieldInfo=${fieldInfo}")
-
-    def valueStr = fieldInfo['hdrValueStr'] // string value for header keyword
-    def datatype = fieldInfo['datatype']    // data type for the value
-    if ((valueStr == null) || !datatype)    // sanity check: need at least value and datatype
-      return                                // exit out now
-
-    def value = null                        // variable for extracted value
-    try {
-      value = stringToValue(valueStr, datatype) // extract value of given type
-    }
-    catch (NumberFormatException nfe) {     // MUST catch before parent exception below
-      def fitsKey = fieldInfo['hdrKey']     // header key from FITS file
-      def msg = "Unable to convert value '${valueStr}' for field '${fitsKey}' to '${datatype}'. Ignoring bad field value."
-      logError('JwstProcessor.addValueForAField', msg)
-      value = null
-    }
-    catch (IllegalArgumentException iax) {
-      def fitsKey = fieldInfo['hdrKey']     // header key from FITS file
-      def msg = "Unknown datatype '${datatype}' for field '${fitsKey}'. Ignoring bad field value."
-      logError('JwstProcessor.addValueForAField', msg)
-      value = null
-    }
-
-    if (value != null)                      // if we extracted a value
-      fieldInfo['value'] = value            // then save extracted value in the field info map
-  }
-
-
-  /**
    * Calculate the corner points and spatial limits for the current image, given the FITS
    * file header fields, and the field information map. The calculated corners and limits
    * are stored back into the field information map.
    */
-  private void calcCorners (Map headerFields, Map fieldsInfo) {
+  private void calcCorners (Map headerFields, FieldsInfo fieldsInfo) {
     log.trace("(JwstProcessor.calcCorners): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
 
     if (['im_ra1','im_dec1', 'im_ra2','im_dec2',  // sanity check all needed fields
@@ -332,7 +297,7 @@ class JwstProcessor implements IFitsFileProcessor {
    * FITS file header and field information.
    *  scale = 3600.0 * sqrt((cd1_1**2 + cd2_1**2 + cd1_2**2 + cd2_2**2) / 2.0)
    */
-  private void calcScale (Map headerFields, Map fieldsInfo) {
+  private void calcScale (Map headerFields, FieldsInfo fieldsInfo) {
     log.trace("(JwstProcessor.calcScale): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
     def cd1_1 = headerFields['CD1_1'] as Double
     def cd1_2 = headerFields['CD1_2'] as Double
@@ -346,9 +311,9 @@ class JwstProcessor implements IFitsFileProcessor {
                                           Math.pow(cd1_2, 2.0) +
                                           Math.pow(cd2_1, 2.0) +
                                           Math.pow(cd2_2, 2.0) / 2.0) )
-      def fieldInfo = fieldsInfo['im_scale']
+      def fieldInfo = fieldsInfo.get('im_scale')
       if (fieldInfo)
-        fieldInfo['value'] = scale
+        fieldInfo.setValue(scale)
     }
   }
 
@@ -357,7 +322,7 @@ class JwstProcessor implements IFitsFileProcessor {
    * Calculate the value string for the ObsCore im_pixeltype field based on the value
    * of the FITS BITPIX keyword.
    */
-  private void calcPixtype (Map headerFields, Map fieldsInfo) {
+  private void calcPixtype (Map headerFields, FieldsInfo fieldsInfo) {
     log.trace("(JwstProcessor.calcPixtype): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
     def bitpix = headerFields['BITPIX']
     def ptInfo = fieldsInfo['im_pixtype']
@@ -371,21 +336,21 @@ class JwstProcessor implements IFitsFileProcessor {
    * Calculate the min/max of the RA and DEC axes. This method must be called after the
    * image corners are computed, since it relies on those values.
    */
-  private void calcSpatialLimits (Map headerFields, Map fieldsInfo) {
+  private void calcSpatialLimits (Map headerFields, FieldsInfo fieldsInfo) {
     log.trace("(JwstProcessor.calcSpatialLimits): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
-    def lo1Info  = fieldsInfo['spat_lolimit1']
-    def hi1Info  = fieldsInfo['spat_hilimit1']
-    def lo2Info  = fieldsInfo['spat_lolimit2']
-    def hi2Info  = fieldsInfo['spat_hilimit2']
+    def lo1Info  = fieldsInfo.get('spat_lolimit1')
+    def hi1Info  = fieldsInfo.get('spat_hilimit1')
+    def lo2Info  = fieldsInfo.get('spat_lolimit2')
+    def hi2Info  = fieldsInfo.get('spat_hilimit2')
 
     if (lo1Info && hi1Info && lo2Info && hi2Info) {  // sanity check all vars
-      def ras = ['im_ra1', 'im_ra2', 'im_ra3', 'im_ra4'].collect{getValueFor(it, fieldsInfo)}
-      def decs = ['im_dec1', 'im_dec2', 'im_dec3', 'im_dec4'].collect{getValueFor(it, fieldsInfo)}
+      def ras = ['im_ra1', 'im_ra2', 'im_ra3', 'im_ra4'].collect{fieldsInfo.getValueFor(it)}
+      def decs = ['im_dec1', 'im_dec2', 'im_dec3', 'im_dec4'].collect{fieldsInfo.getValueFor(it)}
 
-      lo1Info['value'] = ras.min()
-      hi1Info['value'] = ras.max()
-      lo2Info['value'] = decs.min()
-      hi2Info['value'] = decs.max()
+      lo1Info.setValue(ras.min())
+      hi1Info.setValue(ras.max())
+      lo2Info.setValue(decs.min())
+      hi2Info.setValue(decs.max())
     }
   }
 
@@ -394,9 +359,9 @@ class JwstProcessor implements IFitsFileProcessor {
    * Use the filter value to determine the spatial resolution based on a NIRCam
    * filter-resolution table.
    */
-  private void calcSpatialResolution (Map fieldsInfo) {
+  private void calcSpatialResolution (FieldsInfo fieldsInfo) {
     log.trace("(JwstProcessor.calcSpatialResolution): fieldsInfo=${fieldsInfo}")
-    String filter = getValueFor('filter', fieldsInfo)
+    String filter = fieldsInfo.getValueFor('filter')
     if (filter) {
       Double resolution = FILTER_RESOLUTIONS[filter]
       def fieldInfo = fieldsInfo['s_resolution']
@@ -417,7 +382,7 @@ class JwstProcessor implements IFitsFileProcessor {
    *       by the FITS CTYPE1 header field. All other projections cause processing of
    *       the current file to be aborted.
    */
-  private void calcWcsCoords (Map headerFields, Map fieldsInfo) {
+  private void calcWcsCoords (Map headerFields, FieldsInfo fieldsInfo) {
     log.trace("(JwstProcessor.calcWcsCoords): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
     def ctype1 = headerFields['CTYPE1']
     def ctype2 = headerFields['CTYPE2']
@@ -448,20 +413,20 @@ class JwstProcessor implements IFitsFileProcessor {
    * Try to compute a value of the correct type for each field in the given
    * field maps which does not already have a value.
    */
-  private void computeValuesForFields (Map headerFields, Map fieldsInfo) {
+  private void computeValuesForFields (Map headerFields, FieldsInfo fieldsInfo) {
     log.trace("(JwstProcessor.computeValuesForFields): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
 
     ////////////////////////////////////////////////////////////////////////////////
     // NOTE: SPECIAL CASE: correct the t_exptime zero value
     //       with a default of 1347.0 per Eiichi Egami 20190626.
     //       Remove this code when the t_exptime field gets real values in the future.
-    def tExptime = getValueFor('t_exptime', fieldsInfo)
+    def tExptime = fieldsInfo.getValueFor('t_exptime')
     if (tExptime == 0.0)
-      fieldsInfo['t_exptime']['value'] = 1347.0 as Double
+      fieldsInfo.setValueFor('t_exptime', 1347.0 as Double)
     ////////////////////////////////////////////////////////////////////////////////
 
     fieldsInfo.each { key, fieldInfo ->
-      if (!hasValue(fieldInfo)) {           // do not replace existing values
+      if (!fieldInfo.hasValue()) {          // do not replace existing values
         computeValueForAField(fieldInfo, headerFields, fieldsInfo)
       }
     }
@@ -473,11 +438,11 @@ class JwstProcessor implements IFitsFileProcessor {
    * to the field information. The map containing all fields is also passed to this method
    * to enable calculations based on the values of other fields.
    */
-  private void computeValueForAField (Map fieldInfo, Map headerFields, Map fieldsInfo) {
+  private void computeValueForAField (FieldInfo fieldInfo, Map headerFields, FieldsInfo fieldsInfo) {
     log.trace(
       "(JwstProcessor.computeValueForAField): fI=${fieldInfo}, hF=${headerFields}, fsI=${fieldsInfo}")
 
-    if (hasValue(fieldInfo))                // do not replace existing values
+    if (fieldInfo.hasValue())               // do not replace existing values
       return                                // exit out now
 
     def obsCoreKey = fieldInfo['obsCoreKey']
@@ -486,8 +451,8 @@ class JwstProcessor implements IFitsFileProcessor {
         calcWcsCoords(headerFields, fieldsInfo)
         break
       case [ 'im_naxis1', 'im_naxis2' ]:
-        copyValue('s_xel1', 'im_naxis1', fieldsInfo) // s_xel1 already filled by aliasing
-        copyValue('s_xel2', 'im_naxis2', fieldsInfo) // s_xel2 already filled by aliasing
+        fieldsInfo.copyValue('s_xel1', 'im_naxis1') // s_xel1 already filled by aliasing
+        fieldsInfo.copyValue('s_xel2', 'im_naxis2') // s_xel2 already filled by aliasing
         break
       case 's_resolution':
         calcSpatialResolution(fieldsInfo)
@@ -496,47 +461,76 @@ class JwstProcessor implements IFitsFileProcessor {
         calcPixtype(headerFields, fieldsInfo)
         break
       case 'access_url':                    // use filepath for now (TODO: ENHANCE LATER)
-        def filepath = getValueFor('file_path', fieldsInfo)
+        def filepath = fieldsInfo.getValueFor('file_path')
         if (filepath != null)
-          fieldInfo['value'] = "file://${filepath}" as String
+          fieldInfo.setValue("file://${filepath}" as String)
         break
       case 'instrument_name':               // NIRCam + MODULE value
-        def module = getValueFor('nircam_module', fieldsInfo)
+        def module = fieldsInfo.getValueFor('nircam_module')
         String instName = (module != null) ? "NIRCam-${module}" : "NIRCam"
-        fieldInfo['value'] = instName
+        fieldInfo.setValue(instName)
         break
     }
   }
 
 
   /**
-   * Copy the current value from the named field in the given fields information map
-   * to the other named field but only if the "from" field exists and has a value
-   * and the "to" field information already exists. Whether the existing "to" value
-   * is overwritten is determined by the value of the overwrite field (default true).
+   * Try to convert the header value string in each field information entry to the
+   * correct type (as specified in the field info entry).
+   * If successful, the converted value is added back to the corresponding field information.
    */
-  private void copyValue (String fromKey, String toKey, Map fieldsInfo, boolean overwrite=true) {
-    log.trace("(JwstProcessor.copyValue): from=${fromKey}, to=${toKey}, fieldsInfo=${fieldsInfo}, overwrite=${overwrite}")
-    def toField = fieldsInfo.get(toKey)
-    def fromField = fieldsInfo.get(fromKey)
-    if (hasValue(fromField) && (toField != null)) { // From has a value and To exists
-      if (overwrite || !hasValue(toField)) {        // dont replace value if overwrite is false
-        toField['value'] = fromField['value']
-      }
+  private void convertHeaderValues (FieldsInfo fieldsInfo) {
+    log.trace("(JwstProcessor.convertHeaderValues): fieldsInfo=${fieldsInfo}")
+    fieldsInfo.each { key, fieldInfo ->
+      convertAHeaderValue(fieldInfo)
     }
   }
 
+  /**
+   * Try to create a value of the correct type for the given field information map.
+   * Tries to convert the header value string to the proper datatype. If successful,
+   * the value is added back to the field information.
+   */
+  private void convertAHeaderValue (FieldInfo fieldInfo) {
+    log.trace("(JwstProcessor.convertAHeaderValue): fieldInfo=${fieldInfo}")
 
-  private void ensureRequiredFields (Map fieldsInfo) {
+    def valueStr = fieldInfo['hdrValueStr'] // string value for header keyword
+    def datatype = fieldInfo['datatype']    // data type for the value
+    if ((valueStr == null) || !datatype)    // sanity check: need at least value and datatype
+      return                                // exit out now
+
+    def value = null                        // variable for extracted value
+    try {
+      value = stringToValue(valueStr, datatype) // extract value of given type
+    }
+    catch (NumberFormatException nfe) {     // MUST catch before parent exception below
+      def fitsKey = fieldInfo['hdrKey']     // header key from FITS file
+      def msg = "Unable to convert value '${valueStr}' for field '${fitsKey}' to '${datatype}'. Ignoring bad field value."
+      Utils.logError('JwstProcessor.addValueForAField', msg)
+      value = null
+    }
+    catch (IllegalArgumentException iax) {
+      def fitsKey = fieldInfo['hdrKey']     // header key from FITS file
+      def msg = "Unknown datatype '${datatype}' for field '${fitsKey}'. Ignoring bad field value."
+      Utils.logError('JwstProcessor.addValueForAField', msg)
+      value = null
+    }
+
+    if (value != null)                      // if we extracted a value
+      fieldInfo.setValue(value)             // then save extracted value in the field info map
+  }
+
+
+  private void ensureRequiredFields (FieldsInfo fieldsInfo) {
     log.trace("(JwstProcessor.ensureRequiredFields): fieldsInfo=${fieldsInfo}")
     // TODO: ENHANCE LATER? (TAKE SOME ACTION?)
     fieldsInfo.each { key, fieldInfo ->
       def obsCoreKey = fieldInfo['obsCoreKey']
-      if (obsCoreKey && !hasValue(fieldInfo)) { // find ObsCore fields which still have no value
+      if (obsCoreKey && !fieldInfo.hasValue()) { // find ObsCore fields which still have no value
         def reqFld = fieldInfo['required'] ? 'Required' : 'Optional'
         def msg = "${reqFld} field '${obsCoreKey}' still does not have a value."
         if (VERBOSE || DEBUG)
-          logWarning('JwstProcessor.ensureRequiredFields', msg, false)
+          Utils.logWarning('JwstProcessor.ensureRequiredFields', msg, false)
       }
     }
   }
@@ -567,15 +561,6 @@ class JwstProcessor implements IFitsFileProcessor {
   private String getObsCoreKeyFromAlias (hdrKey) {
     log.trace("(JwstProcessor.getObsCoreKeyFromAlias): hdrKey=${hdrKey}")
     return fitsAliases.get(hdrKey)
-  }
-
-  /**
-   * Return the current value for the named field in the given fields map, or null if
-   *  the named field is not present or if it does not have a current value.
-   */
-  private def getValueFor (String whichField, Map fieldsInfo) {
-    def fld = fieldsInfo.get(whichField)
-    return ((fld != null) ? fld.get('value') : null)
   }
 
 
@@ -614,11 +599,6 @@ class JwstProcessor implements IFitsFileProcessor {
     return keywords
   }
 
-
-  /** Return true if the given field info is none-null and has a data value, else return false. */
-  private boolean hasValue (Map fieldInfo) {
-    return ((fieldInfo != null) && (fieldInfo['value'] != null))
-  }
 
   /** Locate the aliases file, load the aliases, and return them. */
   private Map loadAliases (File aliasFile) {
@@ -715,27 +695,6 @@ class JwstProcessor implements IFitsFileProcessor {
 
 
   /**
-   * Log the given error message from the named method. Output the error to
-   * the standard error stream if the final argument is true (the default).
-   */
-  private void logError (String fromWhere, String msg, boolean toSysErr=true) {
-    log.error("(${fromWhere}): ${msg}")
-    if (toSysErr)
-      System.err.println("ERROR: (${fromWhere}): ${msg}")
-  }
-
-  /**
-   * Log the given warning message from the named method. Output the warning to
-   * the standard error stream if the final argument is true (the default).
-   */
-  private void logWarning (String fromWhere, String msg, boolean toSysErr=true) {
-    log.warn("(${fromWhere}): ${msg}")
-    if (toSysErr)
-      System.err.println("WARNING: (${fromWhere}): ${msg}")
-  }
-
-
-  /**
    * Open, read, and return a Fits object from the given File, which is assumed to be
    * pointing to a valid, readable FITS file.
    * Returns the new Fits object, or null if problems encountered.
@@ -753,7 +712,7 @@ class JwstProcessor implements IFitsFileProcessor {
     }
     catch (Exception iox) {
       def msg = "Invalid FITS Header encountered in file '${aFile.getAbsolutePath()}'. File skipped."
-      logError('JwstProcessor.readFitsFile', msg)
+      Utils.logError('JwstProcessor.readFitsFile', msg)
       return null                           // signal unable to open/read FITS file
     }
 
@@ -765,20 +724,19 @@ class JwstProcessor implements IFitsFileProcessor {
    * Store the given sky coordinates (RA, DEC) into the corner fields named by the
    * given RA field keyword and DEC field keyword, respectively.
    */
-  private void setCornerField (Map fieldsInfo, String raFieldKey, String decFieldKey, List sky)  {
+  private void setCornerField (FieldsInfo fieldsInfo, String raFieldKey, String decFieldKey, List sky)  {
     log.trace("(JwstProcessor.setCornerField): raFieldKey=${raFieldKey}, decFieldKey=${decFieldKey}, sky=${sky}")
     if (sky && (sky.size() > 1)) {
-      fieldsInfo[raFieldKey]['value']  = sky[0]
-      fieldsInfo[decFieldKey]['value'] = sky[1]
+      fieldsInfo.setValueFor(raFieldKey, sky[0])
+      fieldsInfo.setValueFor(decFieldKey, sky[1])
     }
   }
-
 
   /**
    * Convert the given string value to the given datatype. Allowed datatype values
    * are limited: "date", "double", "integer", "string".
    */
-  private def stringToValue (String valueStr, String datatype) {
+  public static def stringToValue (String valueStr, String datatype) {
     log.trace("(JwstProcessor.stringToValue): valueStr='${valueStr}', datatype='${datatype}'")
 
     if ((valueStr == null) || !datatype)    // sanity check: need at least value and datatype
@@ -803,7 +761,6 @@ class JwstProcessor implements IFitsFileProcessor {
         "Unable to convert value '${valueStr}' to '${datatype}'.")
     }
   }
-
 
   /**
    * Transform the given pixel coordinates into world coordinates and return a list
