@@ -3,10 +3,13 @@ JARNAME = fitsfileprocessor.jar
 BUILDJAR = $(BUILDLIB)/$(JARNAME)
 GSRC = src/main/groovy/edu/arizona/astrolabe/ffp/*.groovy
 
-.PHONY: help clean build gen jar exec watch reset
+.PHONY: help build clean cleanout exec reset run rund runq watch
 
 help:
-	@echo "Make what? Try: clean, cleanout, build, exec, reset, run, rund, runq, testjar, jar, watch"
+	@echo "Make what? Try: build, clean, cleanout, docker, exec, reset, run, rund, runq, testjar, jar, watch"
+
+build:
+	gradle clean build
 
 clean:
 	gradle clean
@@ -14,7 +17,7 @@ clean:
 cleanout:
 	rm -f out/ffp*
 
-build: $(BUILDJAR)
+docker: $(BUILDJAR)
 	docker build -t ffp .
 
 exec:
