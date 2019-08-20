@@ -2,15 +2,18 @@ package edu.arizona.astrolabe.ffp
 
 import java.io.*
 import java.util.zip.GZIPInputStream
-import nom.tam.fits.*
 import org.apache.logging.log4j.*
+
+import nom.tam.fits.*
+import ca.nrc.cadc.wcs.*
+import ca.nrc.cadc.wcs.Transform.Result
 
 /**
  * Astrolabe JWST-specific FITS file processor class.
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Calculate the spatial_limits from the corners.
+ *   Last Modified: Implement corner coords using WCSlib.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -77,7 +80,7 @@ class JwstProcessor implements IFitsFileProcessor {
 
     // load the FITS field name aliases from a given file path or a default resource path.
     fitsAliases = loadAliases(config.aliasFile)
-    // if (DEBUG)                              // REMOVE LATER
+    // if (DEBUG)
     //   fitsAliases.each { entry -> System.err.println("${entry.key}=${entry.value}") }
     infoOutputter = new InformationOutputter(configuration)
   }
@@ -101,16 +104,18 @@ class JwstProcessor implements IFitsFileProcessor {
 
     Header header = fits.getHDU(0).getHeader() // get the header from the primary HDU
     Map headerFields = getHeaderFields(fits)   // get a map of all FITS headers and value strings
-    // if (DEBUG) {                               // REMOVE LATER
-    //   System.err.println("HDR FIELDS(${headerFields.size()}): ${headerFields}")
-    //   // headerFields.each { key, val -> System.err.println("${key}: ${val}") }
+    // if (DEBUG) {
+    //   System.err.println("HDR FIELDS(${headerFields.size()})")
+    //   headerFields.each { key, val ->
+    //     System.err.println("${key}: ${val} ${val.getClass().getName()}")
+    //   }
     // }
 
     // add information about the input file that is being processed
     addFileInformation(aFile, fieldsInfo)
 
-    // calculate the plate scale for each image:
-    Double plateScale = calcPlateScale(headerFields, fieldsInfo)
+    // calculate the scale for each image
+    calcScale(headerFields, fieldsInfo)
 
     try {
       // add header field keys and string values from the FITS file
@@ -122,11 +127,14 @@ class JwstProcessor implements IFitsFileProcessor {
       // add defaults for missing values, if possible
       addDefaultValuesForFields(fieldsInfo)
 
+      // calculate the image corners and spatial limits
+      calcCorners(headerFields, fieldsInfo)
+
       // try to compute values for computable fields which are still missing values
       computeValuesForFields(headerFields, fieldsInfo)
-      if (DEBUG) {                          // REMOVE LATER
-        fieldsInfo.each { entry -> System.err.println("${entry.key}=${entry.value}") }
-      }
+      // if (DEBUG) {
+      //   fieldsInfo.each { entry -> System.err.println("${entry.key}=${entry.value}") }
+      // }
 
       // do some checks for required fields
       ensureRequiredFields(fieldsInfo)
@@ -284,21 +292,34 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
 
-  // TODO: IMPLEMENT LATER
+  /**
+   * Calculate the corner points and spatial limits for the current image, given the FITS
+   * file header fields, and the field information map. The calculated corners and limits
+   * are stored back into the field information map.
+   */
   private void calcCorners (Map headerFields, Map fieldsInfo) {
     log.trace("(JwstProcessor.calcCorners): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
-    // NOTE: IMPLEMENT LATER: THIS CONSTANT DATA IS FAKED FROM ONE IMAGE:
-    if (['im_ra1','im_dec1', 'im_ra2','im_dec2',
+
+    if (['im_ra1','im_dec1', 'im_ra2','im_dec2',  // sanity check all needed fields
          'im_ra3','im_dec3', 'im_ra4','im_dec4'].collect{fieldsInfo[it]}.every{it})
     {
-      fieldsInfo['im_ra1']['value']  = 53.24930803  // LL
-      fieldsInfo['im_dec1']['value'] = -27.85921858 // LL
-      fieldsInfo['im_ra2']['value']  = 53.09737379  // LR
-      fieldsInfo['im_dec2']['value'] = -27.85922807 // LR
-      fieldsInfo['im_ra3']['value']  = 53.09744592  // UR
-      fieldsInfo['im_dec3']['value'] = -27.74263653 // UR
-      fieldsInfo['im_ra4']['value']  = 53.24921734  // UL
-      fieldsInfo['im_dec4']['value'] = -27.74262709 // UL
+      WCSKeywords wcs = getWcsKeys(headerFields) // WCS lib needs its own key/value data structure
+      Transform trans = new Transform(wcs)       // create a transform from the keywords
+
+      Double naxis1 = wcs.getDoubleValue('NAXIS1') // max RA pixel index
+      Double naxis2 = wcs.getDoubleValue('NAXIS2') // max DEC pixel index
+
+      setCornerField(fieldsInfo, 'im_ra1', 'im_dec1',
+                     transformPix2Sky(trans, 1.0, 1.0))       // LowerLeft
+
+      setCornerField(fieldsInfo, 'im_ra2', 'im_dec2',
+                     transformPix2Sky(trans, 1.0, naxis2))    // UpperLeft
+
+      setCornerField(fieldsInfo, 'im_ra3', 'im_dec3',
+                     transformPix2Sky(trans, naxis1, naxis2)) // UpperRight
+
+      setCornerField(fieldsInfo, 'im_ra4', 'im_dec4',
+                     transformPix2Sky(trans, naxis1, 1.0))    // LowerRight
 
       // now use the corners to calculate the min/max spatial limits of the image
       calcSpatialLimits(headerFields, fieldsInfo)
@@ -307,12 +328,12 @@ class JwstProcessor implements IFitsFileProcessor {
 
 
   /**
-   * Calculate the plate scale (arcsec/pixel) for the current image using the given
+   * Calculate the scale (arcsec/pixel) for the current image using the given
    * FITS file header and field information.
    *  scale = 3600.0 * sqrt((cd1_1**2 + cd2_1**2 + cd1_2**2 + cd2_2**2) / 2.0)
    */
-  private Double calcPlateScale (Map headerFields, Map fieldsInfo) {
-    log.trace("(JwstProcessor.calcPlateScale): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
+  private void calcScale (Map headerFields, Map fieldsInfo) {
+    log.trace("(JwstProcessor.calcScale): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
     def cd1_1 = headerFields['CD1_1'] as Double
     def cd1_2 = headerFields['CD1_2'] as Double
     def cd2_1 = headerFields['CD2_1'] as Double
@@ -328,7 +349,6 @@ class JwstProcessor implements IFitsFileProcessor {
       def fieldInfo = fieldsInfo['im_scale']
       if (fieldInfo)
         fieldInfo['value'] = scale
-      return scale
     }
   }
 
@@ -465,9 +485,6 @@ class JwstProcessor implements IFitsFileProcessor {
       case ['s_ra', 's_dec']:               // coordinate fields extracted from the file
         calcWcsCoords(headerFields, fieldsInfo)
         break
-      case [ 'im_ra1', 'im_dec1', 'im_ra2', 'im_dec2', 'im_ra3', 'im_dec3', 'im_ra4', 'im_dec4' ]:
-        calcCorners(headerFields, fieldsInfo)
-        break
       case [ 'im_naxis1', 'im_naxis2' ]:
         copyValue('s_xel1', 'im_naxis1', fieldsInfo) // s_xel1 already filled by aliasing
         copyValue('s_xel2', 'im_naxis2', fieldsInfo) // s_xel2 already filled by aliasing
@@ -512,7 +529,7 @@ class JwstProcessor implements IFitsFileProcessor {
 
   private void ensureRequiredFields (Map fieldsInfo) {
     log.trace("(JwstProcessor.ensureRequiredFields): fieldsInfo=${fieldsInfo}")
-    // TODO: IMPLEMENT MORE LATER?
+    // TODO: ENHANCE LATER? (TAKE SOME ACTION?)
     fieldsInfo.each { key, fieldInfo ->
       def obsCoreKey = fieldInfo['obsCoreKey']
       if (obsCoreKey && !hasValue(fieldInfo)) { // find ObsCore fields which still have no value
@@ -559,6 +576,42 @@ class JwstProcessor implements IFitsFileProcessor {
   private def getValueFor (String whichField, Map fieldsInfo) {
     def fld = fieldsInfo.get(whichField)
     return ((fld != null) ? fld.get('value') : null)
+  }
+
+
+  /**
+   *  Create and return a WCSLib data structure containing important WCS keywords
+   *  and their values, extracted from the given FITS file header fields.
+   */
+  private WCSKeywords getWcsKeys(headerFields) {
+    log.trace("(JwstProcessor.getWcsKeys): headerFields=${headerFields}")
+
+    WCSKeywords keywords = new WCSKeywordsImpl()
+
+    keywords.put('CD1_1', headerFields['CD1_1'] as Double)
+    keywords.put('CD1_2', headerFields['CD1_2'] as Double)
+    keywords.put('CD2_1', headerFields['CD2_1'] as Double)
+    keywords.put('CD2_2', headerFields['CD2_2'] as Double)
+
+    keywords.put('CRPIX1', headerFields['CRPIX1'] as Double)
+    keywords.put('CRPIX2', headerFields['CRPIX2'] as Double)
+
+    keywords.put('CRVAL1', headerFields['CRVAL1'] as Double)
+    keywords.put('CRVAL2', headerFields['CRVAL2'] as Double)
+
+    keywords.put('CTYPE1', headerFields['CTYPE1'])
+    keywords.put('CTYPE2', headerFields['CTYPE2'])
+
+    keywords.put('CUNIT1', headerFields['CUNIT1'])
+    keywords.put('CUNIT2', headerFields['CUNIT2'])
+
+    keywords.put('EQUINOX', headerFields['EQUINOX'] as Double)
+    keywords.put('NAXIS',   headerFields['NAXIS'] as Integer)
+    keywords.put('NAXIS1',  headerFields['NAXIS1'] as Integer)
+    keywords.put('NAXIS2',  headerFields['NAXIS2'] as Integer)
+    keywords.put('RADESYS', headerFields['RADESYS'])
+
+    return keywords
   }
 
 
@@ -709,6 +762,19 @@ class JwstProcessor implements IFitsFileProcessor {
 
 
   /**
+   * Store the given sky coordinates (RA, DEC) into the corner fields named by the
+   * given RA field keyword and DEC field keyword, respectively.
+   */
+  private void setCornerField (Map fieldsInfo, String raFieldKey, String decFieldKey, List sky)  {
+    log.trace("(JwstProcessor.setCornerField): raFieldKey=${raFieldKey}, decFieldKey=${decFieldKey}, sky=${sky}")
+    if (sky && (sky.size() > 1)) {
+      fieldsInfo[raFieldKey]['value']  = sky[0]
+      fieldsInfo[decFieldKey]['value'] = sky[1]
+    }
+  }
+
+
+  /**
    * Convert the given string value to the given datatype. Allowed datatype values
    * are limited: "date", "double", "integer", "string".
    */
@@ -736,6 +802,20 @@ class JwstProcessor implements IFitsFileProcessor {
       throw new NumberFormatException(
         "Unable to convert value '${valueStr}' to '${datatype}'.")
     }
+  }
+
+
+  /**
+   * Transform the given pixel coordinates into world coordinates and return a list
+   * of the RA and DEC coordinates. Returns null if unable to transform the pixel coordinates.
+   */
+  private List transformPix2Sky (Transform trans, Double x, Double y) {
+    log.trace("(JwstProcessor.transformPix2Sky): trans=${trans}, x=${x}, y=${y}")
+    def pix = [x, y] as Double[]
+    Transform.Result sky = trans.pix2sky(pix)
+    if (sky && sky.coordinates)
+      return [ sky.coordinates[0], sky.coordinates[1] ]
+    return null                             // signal failure
   }
 
 }
