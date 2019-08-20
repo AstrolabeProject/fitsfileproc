@@ -23,8 +23,8 @@ dependencies {
   implementation "org.codehaus.groovy:groovy:${groovyVersion}"
   // implementation "org.codehaus.groovy:groovy-json:${groovyVersion}"
   implementation "org.codehaus.groovy:groovy-cli-commons:${groovyVersion}"
-  implementation 'org.apache.logging.log4j:log4j-core:2.12.0'
-  implementation 'org.apache.logging.log4j:log4j-api:2.12.0'
+  implementation 'org.apache.logging.log4j:log4j-core:2.12.1'
+  implementation 'org.apache.logging.log4j:log4j-api:2.12.1'
   implementation 'gov.nasa.gsfc.heasarc:nom-tam-fits:1.15.2'
   implementation fileTree(dir: 'libs', include: whichLib)
   testCompile 'junit:junit'
