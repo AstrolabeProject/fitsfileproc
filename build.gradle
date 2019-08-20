@@ -14,9 +14,9 @@ repositories {
 
 def groovyVersion = "2.5.7"
 
-def whichLib = 'cadc-wcs-2.0_linux.jar'
-def whichOS = System.getProperty('os.name').toLowerCase()
-if (whichOS.contains('os x'))
+def whichLib = 'cadc-wcs-2.1_linux.jar'
+def whichOS = project.hasProperty('os') ? project.os : 'linux'
+if (whichOS.contains('osx') || whichOS.contains('darwin'))
   whichLib = 'cadc-wcs-2.1_darwin.jar'
 
 dependencies {

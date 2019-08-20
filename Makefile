@@ -6,7 +6,7 @@ GSRC = src/main/groovy/edu/arizona/astrolabe/ffp/*.groovy
 .PHONY: help build clean cleanout exec reset run rund runq watch
 
 help:
-	@echo "Make what? Try: build, clean, cleanout, docker, exec, reset, run, rund, runq, testjar, jar, watch"
+	@echo "Make what? Try: build, clean, cleanout, docker, exec, jar, macjar, reset, run, rund, runq, testjar, watch"
 
 build:
 	gradle clean build
@@ -42,6 +42,9 @@ testjar: $(BUILDJAR)
 
 watch:
 	docker logs -f ffp
+
+macjar: $(GSRC)
+	gradle clean build -Pos=darwin
 
 jar: $(BUILDJAR)
 
