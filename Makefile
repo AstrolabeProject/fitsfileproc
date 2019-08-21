@@ -24,8 +24,7 @@ exec:
 	docker run -it --rm --name ffp -v $(PWD)/data:/data -v $(PWD)/out:/out --entrypoint /bin/bash ffp
 
 reset:
-	docker stop ffp
-	docker rm ffp
+	docker rm -f ffp
 
 run:
 	docker run -it --rm --name ffp -v $(PWD)/data:/data -v $(PWD)/out:/out ffp
