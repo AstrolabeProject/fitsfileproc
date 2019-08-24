@@ -61,7 +61,7 @@ t_resolution, double, true, *
 
 # Observable Axis (section B.6.4)
 #
-o_ucd, string, true, photo.count
+o_ucd, string, true, phot.count
 
 # Polarization Characterisation (section B.6.5)
 #
