@@ -13,7 +13,7 @@ import ca.nrc.cadc.wcs.Transform.Result
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Refactor for new field information structures.
+ *   Last Modified: Temporary config: set access_url to a file URL within a Firefly mount point.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -461,9 +461,10 @@ class JwstProcessor implements IFitsFileProcessor {
         calcPixtype(headerFields, fieldsInfo)
         break
       case 'access_url':                    // use filepath for now (TODO: ENHANCE LATER)
-        def filepath = fieldsInfo.getValueFor('file_path')
-        if (filepath != null)
-          fieldInfo.setValue("file://${filepath}" as String)
+        def filename = fieldsInfo.getValueFor('file_name')
+        // NOTE: Temporary kludge for Firefly to return external file mount path:
+        if (filename != null)               // TODO LATER: return real URL for image access
+          fieldInfo.setValue("file:///external/${filename}" as String)
         break
       case 'instrument_name':               // NIRCam + MODULE value
         def module = fieldsInfo.getValueFor('nircam_module')
