@@ -13,7 +13,7 @@ import ca.nrc.cadc.wcs.Transform.Result
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Temporary config: set access_url to a file URL within a Firefly mount point.
+ *   Last Modified: Calculate target name based on filename. Safeguard coord transform.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -471,6 +471,17 @@ class JwstProcessor implements IFitsFileProcessor {
         String instName = (module != null) ? "NIRCam-${module}" : "NIRCam"
         fieldInfo.setValue(instName)
         break
+      case 'target_name':                   // making something up
+        def filename = fieldsInfo.getValueFor('file_name')
+        if (filename != null) {
+          if (filename.toLowerCase().startsWith("goods_s"))
+              fieldInfo.setValue("goods_south")
+          else if (filename.toLowerCase().startsWith("goods_n"))
+              fieldInfo.setValue("goods_north")
+          else
+              fieldInfo.setValue("UNKNOWN")
+        }
+        break
     }
   }
 
@@ -770,9 +781,13 @@ class JwstProcessor implements IFitsFileProcessor {
   private List transformPix2Sky (Transform trans, Double x, Double y) {
     log.trace("(JwstProcessor.transformPix2Sky): trans=${trans}, x=${x}, y=${y}")
     def pix = [x, y] as Double[]
-    Transform.Result sky = trans.pix2sky(pix)
-    if (sky && sky.coordinates)
-      return [ sky.coordinates[0], sky.coordinates[1] ]
+    try {
+      Transform.Result sky = trans.pix2sky(pix)
+      if (sky && sky.coordinates)
+        return [ sky.coordinates[0], sky.coordinates[1] ]
+    } catch (Exception ex) {
+      return null                           // signal failure
+    }
     return null                             // signal failure
   }
 
