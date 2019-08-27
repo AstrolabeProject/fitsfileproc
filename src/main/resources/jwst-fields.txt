@@ -17,7 +17,7 @@ calib_level, integer, true, 3
 
 # Target Information (section B.2)
 #
-target_name, string, true, NO_TARGET_NAME
+target_name, string, true, *
 
 # Data Descriptions (section B.3)
 #
@@ -26,7 +26,7 @@ obs_collection, string, true, JWST/NIRCam
 
 # Curation Information (section B.4)
 #
-obs_publisher_did, string, true, FAKE_OBS_PUBLISHER_DID
+obs_publisher_did, string, true, ivo://astrolabe.arizona.edu/jwst
 
 # Access Information (section B.5)
 #
@@ -77,7 +77,7 @@ instrument_name, string, true, *
 #
 # Non-Mandatory ObsCore
 #
-obs_creator_name, string, false, FAKE_OBS_CREATOR_NAME
+obs_creator_name, string, false, JWST
 
 
 #
