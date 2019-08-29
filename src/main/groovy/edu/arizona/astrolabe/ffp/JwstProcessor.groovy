@@ -4,16 +4,12 @@ import java.io.*
 import java.util.zip.GZIPInputStream
 import org.apache.logging.log4j.*
 
-import nom.tam.fits.*
-import ca.nrc.cadc.wcs.*
-import ca.nrc.cadc.wcs.Transform.Result
-
 /**
  * Astrolabe JWST-specific FITS file processor class.
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Calculate target name based on filename. Safeguard coord transform.
+ *   Last Modified: Refactor FITS specific methods to FITS utility class.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -100,26 +96,18 @@ class JwstProcessor implements IFitsFileProcessor {
   public int processAFile (File aFile) {
     log.trace("(JwstProcessor.processAFile): aFile=${aFile}")
 
-    Fits fits = readFitsFile(aFile)         // make FITS object from given FITS file
-    if (!fits)                              // if unable to open/read FITS file
-      return 0                              // then skip this file
-
     if (VERBOSE)
       log.info("(JwstProcessor.processAFile): Processing FITS file '${aFile.getAbsolutePath()}'")
+
+    // make a map of all FITS headers and value strings
+    Map headerFields = FitsUtils.getHeaderFields(aFile)
+    if (headerFields == null)               // if unable to read the FITS file headers
+      return 0                              // then skip this file
 
     // Data structure defining information for fields processed by this processor.
     // Loads the field information from a given file or a default resource path.
     // NOTE: need to reload this for each file as it will be mutated for each file:
     FieldsInfo fieldsInfo = fieldsInfoFactory.loadFieldsInfo(config.fieldsFile)
-
-    Header header = fits.getHDU(0).getHeader() // get the header from the primary HDU
-    Map headerFields = getHeaderFields(fits)   // get a map of all FITS headers and value strings
-    // if (DEBUG) {
-    //   System.err.println("HDR FIELDS(${headerFields.size()})")
-    //   headerFields.each { key, val ->
-    //     System.err.println("${key}: ${val} ${val.getClass().getName()}")
-    //   }
-    // }
 
     // add information about the input file that is being processed
     addFileInformation(aFile, fieldsInfo)
@@ -132,7 +120,7 @@ class JwstProcessor implements IFitsFileProcessor {
       addInfoFromFitsHeaders(headerFields, fieldsInfo)
 
       // convert the header field string values, where possible
-      convertHeaderValues(fieldsInfo)
+      FitsUtils.convertHeaderValues(fieldsInfo)
 
       // add defaults for missing values, if possible
       addDefaultValuesForFields(fieldsInfo)
@@ -196,7 +184,7 @@ class JwstProcessor implements IFitsFileProcessor {
 
     def value = null                        // variable for extracted value
     try {
-      value = stringToValue(defaultStr, datatype) // extract value of given type
+      value = FitsUtils.stringToValue(defaultStr, datatype) // extract value of given type
     }
     catch (NumberFormatException nfe) {     // MUST catch before parent exception below
       def obsCoreKey = fieldInfo['obsCoreKey']
@@ -268,23 +256,11 @@ class JwstProcessor implements IFitsFileProcessor {
     if (['im_ra1','im_dec1', 'im_ra2','im_dec2',  // sanity check all needed fields
          'im_ra3','im_dec3', 'im_ra4','im_dec4'].collect{fieldsInfo[it]}.every{it})
     {
-      WCSKeywords wcs = getWcsKeys(headerFields) // WCS lib needs its own key/value data structure
-      Transform trans = new Transform(wcs)       // create a transform from the keywords
-
-      Double naxis1 = wcs.getDoubleValue('NAXIS1') // max RA pixel index
-      Double naxis2 = wcs.getDoubleValue('NAXIS2') // max DEC pixel index
-
-      setCornerField(fieldsInfo, 'im_ra1', 'im_dec1',
-                     transformPix2Sky(trans, 1.0, 1.0))       // LowerLeft
-
-      setCornerField(fieldsInfo, 'im_ra2', 'im_dec2',
-                     transformPix2Sky(trans, 1.0, naxis2))    // UpperLeft
-
-      setCornerField(fieldsInfo, 'im_ra3', 'im_dec3',
-                     transformPix2Sky(trans, naxis1, naxis2)) // UpperRight
-
-      setCornerField(fieldsInfo, 'im_ra4', 'im_dec4',
-                     transformPix2Sky(trans, naxis1, 1.0))    // LowerRight
+      List corners = FitsUtils.calcCorners(headerFields)
+      setCornerField(fieldsInfo, 'im_ra1', 'im_dec1', corners[0]) // LowerLeft
+      setCornerField(fieldsInfo, 'im_ra2', 'im_dec2', corners[1]) // UpperLeft
+      setCornerField(fieldsInfo, 'im_ra3', 'im_dec3', corners[2]) // UpperRight
+      setCornerField(fieldsInfo, 'im_ra4', 'im_dec4', corners[3]) // LowerRight
 
       // now use the corners to calculate the min/max spatial limits of the image
       calcSpatialLimits(headerFields, fieldsInfo)
@@ -486,53 +462,6 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
 
-  /**
-   * Try to convert the header value string in each field information entry to the
-   * correct type (as specified in the field info entry).
-   * If successful, the converted value is added back to the corresponding field information.
-   */
-  private void convertHeaderValues (FieldsInfo fieldsInfo) {
-    log.trace("(JwstProcessor.convertHeaderValues): fieldsInfo=${fieldsInfo}")
-    fieldsInfo.each { key, fieldInfo ->
-      convertAHeaderValue(fieldInfo)
-    }
-  }
-
-  /**
-   * Try to create a value of the correct type for the given field information map.
-   * Tries to convert the header value string to the proper datatype. If successful,
-   * the value is added back to the field information.
-   */
-  private void convertAHeaderValue (FieldInfo fieldInfo) {
-    log.trace("(JwstProcessor.convertAHeaderValue): fieldInfo=${fieldInfo}")
-
-    def valueStr = fieldInfo['hdrValueStr'] // string value for header keyword
-    def datatype = fieldInfo['datatype']    // data type for the value
-    if ((valueStr == null) || !datatype)    // sanity check: need at least value and datatype
-      return                                // exit out now
-
-    def value = null                        // variable for extracted value
-    try {
-      value = stringToValue(valueStr, datatype) // extract value of given type
-    }
-    catch (NumberFormatException nfe) {     // MUST catch before parent exception below
-      def fitsKey = fieldInfo['hdrKey']     // header key from FITS file
-      def msg = "Unable to convert value '${valueStr}' for field '${fitsKey}' to '${datatype}'. Ignoring bad field value."
-      Utils.logError('JwstProcessor.addValueForAField', msg)
-      value = null
-    }
-    catch (IllegalArgumentException iax) {
-      def fitsKey = fieldInfo['hdrKey']     // header key from FITS file
-      def msg = "Unknown datatype '${datatype}' for field '${fitsKey}'. Ignoring bad field value."
-      Utils.logError('JwstProcessor.addValueForAField', msg)
-      value = null
-    }
-
-    if (value != null)                      // if we extracted a value
-      fieldInfo.setValue(value)             // then save extracted value in the field info map
-  }
-
-
   private void ensureRequiredFields (FieldsInfo fieldsInfo) {
     log.trace("(JwstProcessor.ensureRequiredFields): fieldsInfo=${fieldsInfo}")
     // TODO: ENHANCE LATER? (TAKE SOME ACTION?)
@@ -548,67 +477,10 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
 
-  /**
-   * Return a List of all non-comment (key/value pair) keywords
-   * in the header of the first HDU of the given FITS file.
-   */
-  private List getHeaderKeys (Fits fits) {
-    log.trace("(JwstProcessor.getHeaderKeys): fits=${fits}")
-    Header header = fits.getHDU(0).getHeader()
-    return header.iterator().findAll{it.isKeyValuePair()}.collect{it.getKey()}
-  }
-
-  /**
-   * Return a Map of all non-comment (key/value pair) keywords and their values
-   * in the header of the first HDU of the given FITS file.
-   */
-  private Map getHeaderFields (Fits fits) {
-    log.trace("(JwstProcessor.getHeaderFields): fits=${fits}")
-    Header header = fits.getHDU(0).getHeader()
-    return header.iterator().findAll{it.isKeyValuePair()}.collectEntries {
-      [ (it.getKey()) : it.getValue() ] }
-  }
-
   /** Return the ObsCore keyword for the given FITS header keyword, or null if none found. */
   private String getObsCoreKeyFromAlias (hdrKey) {
     log.trace("(JwstProcessor.getObsCoreKeyFromAlias): hdrKey=${hdrKey}")
     return fitsAliases.get(hdrKey)
-  }
-
-
-  /**
-   *  Create and return a WCSLib data structure containing important WCS keywords
-   *  and their values, extracted from the given FITS file header fields.
-   */
-  private WCSKeywords getWcsKeys(headerFields) {
-    log.trace("(JwstProcessor.getWcsKeys): headerFields=${headerFields}")
-
-    WCSKeywords keywords = new WCSKeywordsImpl()
-
-    keywords.put('CD1_1', headerFields['CD1_1'] as Double)
-    keywords.put('CD1_2', headerFields['CD1_2'] as Double)
-    keywords.put('CD2_1', headerFields['CD2_1'] as Double)
-    keywords.put('CD2_2', headerFields['CD2_2'] as Double)
-
-    keywords.put('CRPIX1', headerFields['CRPIX1'] as Double)
-    keywords.put('CRPIX2', headerFields['CRPIX2'] as Double)
-
-    keywords.put('CRVAL1', headerFields['CRVAL1'] as Double)
-    keywords.put('CRVAL2', headerFields['CRVAL2'] as Double)
-
-    keywords.put('CTYPE1', headerFields['CTYPE1'])
-    keywords.put('CTYPE2', headerFields['CTYPE2'])
-
-    keywords.put('CUNIT1', headerFields['CUNIT1'])
-    keywords.put('CUNIT2', headerFields['CUNIT2'])
-
-    keywords.put('EQUINOX', headerFields['EQUINOX'] as Double)
-    keywords.put('NAXIS',   headerFields['NAXIS'] as Integer)
-    keywords.put('NAXIS1',  headerFields['NAXIS1'] as Integer)
-    keywords.put('NAXIS2',  headerFields['NAXIS2'] as Integer)
-    keywords.put('RADESYS', headerFields['RADESYS'])
-
-    return keywords
   }
 
 
@@ -707,32 +579,6 @@ class JwstProcessor implements IFitsFileProcessor {
 
 
   /**
-   * Open, read, and return a Fits object from the given File, which is assumed to be
-   * pointing to a valid, readable FITS file.
-   * Returns the new Fits object, or null if problems encountered.
-   */
-  private Fits readFitsFile (File aFile) {
-    log.trace("(JwstProcessor.readFitsFile): aFile=${aFile}")
-    Fits fits = null
-    if (aFile.getName().endsWith('.gz'))
-      fits = new Fits(new FileInputStream(aFile))
-    else
-      fits = new Fits(aFile)
-
-    try {
-      fits.read()                             // read the data into FITS object
-    }
-    catch (Exception iox) {
-      def msg = "Invalid FITS Header encountered in file '${aFile.getAbsolutePath()}'. File skipped."
-      Utils.logError('JwstProcessor.readFitsFile', msg)
-      return null                           // signal unable to open/read FITS file
-    }
-
-    return fits                             // everything OK: return Fits object
-  }
-
-
-  /**
    * Store the given sky coordinates (RA, DEC) into the corner fields named by the
    * given RA field keyword and DEC field keyword, respectively.
    */
@@ -742,53 +588,6 @@ class JwstProcessor implements IFitsFileProcessor {
       fieldsInfo.setValueFor(raFieldKey, sky[0])
       fieldsInfo.setValueFor(decFieldKey, sky[1])
     }
-  }
-
-  /**
-   * Convert the given string value to the given datatype. Allowed datatype values
-   * are limited: "date", "double", "integer", "string".
-   */
-  public static def stringToValue (String valueStr, String datatype) {
-    log.trace("(JwstProcessor.stringToValue): valueStr='${valueStr}', datatype='${datatype}'")
-
-    if ((valueStr == null) || !datatype)    // sanity check: need at least value and datatype
-      return null                           // exit out now
-
-    def value = null                        // return variable for extracted value
-    try {                                   // dispatch conversions on the datatype
-      if (datatype == 'integer')
-        value = valueStr as Integer
-      else if (datatype == 'double')
-        value = valueStr as Double
-      else if (datatype == 'string')
-        value = valueStr
-      else if (datatype == 'date')
-        value = new FitsDate(valueStr)      // FITS date = ISO-8601 w/o the trailing Z
-      else {
-        throw new IllegalArgumentException(
-          "Unknown datatype '${datatype}' specified for conversion.")
-      }
-    } catch (NumberFormatException nfe) {
-      throw new NumberFormatException(
-        "Unable to convert value '${valueStr}' to '${datatype}'.")
-    }
-  }
-
-  /**
-   * Transform the given pixel coordinates into world coordinates and return a list
-   * of the RA and DEC coordinates. Returns null if unable to transform the pixel coordinates.
-   */
-  private List transformPix2Sky (Transform trans, Double x, Double y) {
-    log.trace("(JwstProcessor.transformPix2Sky): trans=${trans}, x=${x}, y=${y}")
-    def pix = [x, y] as Double[]
-    try {
-      Transform.Result sky = trans.pix2sky(pix)
-      if (sky && sky.coordinates)
-        return [ sky.coordinates[0], sky.coordinates[1] ]
-    } catch (Exception ex) {
-      return null                           // signal failure
-    }
-    return null                             // signal failure
   }
 
 }
