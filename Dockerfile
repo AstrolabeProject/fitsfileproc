@@ -6,8 +6,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends libwcs5 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /data /out
+RUN mkdir -p /images /out
 COPY ./build/libs/fitsfileprocessor.jar /
 
 ENTRYPOINT [ "java", "-jar", "fitsfileprocessor.jar" ]
-CMD [ "-v", "-o", "/out", "/data" ]
+CMD [ "-v", "-o", "/out", "/images" ]

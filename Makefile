@@ -21,23 +21,23 @@ docker: $(BUILDJAR)
 	docker build -t ffp .
 
 exec:
-	docker run -it --rm --name ffp -v $(PWD)/data:/data -v $(PWD)/out:/out --entrypoint /bin/bash ffp
+	docker run -it --rm --name ffp -v $(PWD)/images:/images -v $(PWD)/out:/out --entrypoint /bin/bash ffp
 
 reset:
 	docker rm -f ffp
 
 run:
-	docker run -it --rm --name ffp -v $(PWD)/data:/data -v $(PWD)/out:/out ffp
+	docker run -it --rm --name ffp -v $(PWD)/images:/images -v $(PWD)/out:/out ffp
 
 rund:
-	docker run -it --rm --name ffp -v $(PWD)/data:/data -v $(PWD)/out:/out ffp -v -d -o /out /data
+	docker run -it --rm --name ffp -v $(PWD)/images:/images -v $(PWD)/out:/out ffp -v -d -o /out /images
 
 runq:
-	@docker run -d --rm --name ffp -v $(PWD)/data:/data -v $(PWD)/out:/out ffp
+	@docker run -d --rm --name ffp -v $(PWD)/images:/images -v $(PWD)/out:/out ffp
 
 testjar: $(BUILDJAR)
 	mkdir -p out
-	java -jar $(BUILDJAR) -v -o out data
+	java -jar $(BUILDJAR) -v -o out images
 
 watch:
 	docker logs -f ffp
