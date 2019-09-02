@@ -9,7 +9,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Refactor FITS specific methods to FITS utility class.
+ *   Last Modified: Refactor top-level methods anticipating catalog processing.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -98,6 +98,33 @@ class JwstProcessor implements IFitsFileProcessor {
 
     if (VERBOSE)
       log.info("(JwstProcessor.processAFile): Processing FITS file '${aFile.getAbsolutePath()}'")
+
+    if (FitsUtils.isCatalogFile(aFile))
+      return processACatalogFile(aFile)
+    else
+      return processAnImageFile(aFile)
+  }
+
+
+  /** Process the given FITS catalog file. */
+  public int processACatalogFile (File aFile) {
+    log.trace("(JwstProcessor.processACatalogFile): aFile=${aFile}")
+
+    // make a map of all FITS headers and value strings
+    Map headerFields = FitsUtils.getHeaderFields(aFile, 1) // catalog in second HDU
+    if (headerFields == null)               // if unable to read the FITS file headers
+      return 0                              // then skip this file
+    if (DEBUG) {                            // REMOVE LATER
+      System.err.println("HDU 1 FIELDS(${headerFields.size()}):")
+      headerFields.each { key, val -> System.err.println("${key}: ${val}") }
+    }
+    return 1                                // successfully processed one more file
+  }
+
+
+  /** Process the given FITS image file. */
+  public int processAnImageFile (File aFile) {
+    log.trace("(JwstProcessor.processAnImageFile): aFile=${aFile}")
 
     // make a map of all FITS headers and value strings
     Map headerFields = FitsUtils.getHeaderFields(aFile)
