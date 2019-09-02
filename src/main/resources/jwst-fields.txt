@@ -22,7 +22,7 @@ target_name, string, true, *
 # Data Descriptions (section B.3)
 #
 obs_id, string, true, FAKE_OBS_ID_1
-obs_collection, string, true, JWST/NIRCam
+obs_collection, string, true, JWST/images
 
 # Curation Information (section B.4)
 #
