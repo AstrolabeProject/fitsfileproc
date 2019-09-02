@@ -9,7 +9,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Refactor FITS specific methods to FITS utility class.
+ *   Last Modified: Modify access URL for temporary Firefly compatability.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -440,7 +440,7 @@ class JwstProcessor implements IFitsFileProcessor {
         def filename = fieldsInfo.getValueFor('file_name')
         // NOTE: Temporary kludge for Firefly to return external file mount path:
         if (filename != null)               // TODO LATER: return real URL for image access
-          fieldInfo.setValue("file:///external/${filename}" as String)
+          fieldInfo.setValue("/external/${filename}" as String)
         break
       case 'instrument_name':               // NIRCam + MODULE value
         def module = fieldsInfo.getValueFor('nircam_module')
