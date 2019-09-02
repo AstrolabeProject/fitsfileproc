@@ -12,7 +12,7 @@ import ca.nrc.cadc.wcs.Transform.Result
  *   This class implements shared utility methods for FITS file processing (all public static).
  *
  *   Written by: Tom Hicks. 8/28/2019.
- *   Last Modified: Initial creation: split from JWST processor class.
+ *   Last Modified: Allow to get headers from other HDUs. Add isCatalogFile testing stub.
  */
 class FitsUtils {
   static final Logger log = LogManager.getLogger(FitsUtils.class.getName());
@@ -86,30 +86,38 @@ class FitsUtils {
 
 
   /**
-   * Return a List of all non-comment (key/value pair) keywords
-   * in the header of the first HDU of the given FITS file.
+   * Return a List of all non-comment (key/value pair) keywords in the header of the
+   * specified HDU of the given FITS file. By default, the first HDU is used.
    */
-  public static List getHeaderKeys (Fits fits) {
+  public static List getHeaderKeys (Fits fits, whichHDU=0) {
     log.trace("(FitsUtils.getHeaderKeys): fits=${fits}")
-    Header header = fits.getHDU(0).getHeader()
+    Header header = fits.getHDU(whichHDU).getHeader() // get the header from the specified HDU
     return header.iterator().findAll{it.isKeyValuePair()}.collect{it.getKey()}
   }
 
   /**
-   * Return a Map of all non-comment (key/value pair) keywords and their values
-   * in the header of the first HDU of the given FITS file.
+   * Return a Map of all non-comment (key/value pair) keywords and their values in the
+   * header of the specified HDU of the given FITS file. By default, the first HDU is used.
    */
-  public static Map getHeaderFields (File aFile) {
+  public static Map getHeaderFields (File aFile, whichHDU=0) {
     log.trace("(FitsUtils.getHeaderFields): aFile=${aFile}")
 
     Fits fits = FitsUtils.readFitsFile(aFile) // make FITS object from given FITS file
     if (!fits)                                // if unable to open/read FITS file
       return null                             // then signal failure
 
-    Header header = fits.getHDU(0).getHeader() // get the header from the primary HDU
+    Header header = fits.getHDU(whichHDU).getHeader() // get the header from the specified HDU
     return header.iterator().findAll{it.isKeyValuePair()}.collectEntries {
       [ (it.getKey()) : it.getValue() ]
     }
+  }
+
+
+  /** Tell whether the given File is a FITS catalog or not. */
+  public static boolean isCatalogFile (File aFile) {
+    log.trace("(FitsUtils.isCatalogFile): aFile=${aFile}")
+    // TODO: IMPLEMENT THIS METHOD FOR REAL
+    return aFile.getName().startsWith('JADE') // TODO: FIX THIS LATER, just for testing now
   }
 
 
