@@ -9,10 +9,10 @@ import ca.nrc.cadc.wcs.Transform.Result
 
 /**
  * Astrolabe JWST-specific FITS file processor project.
- *   This class implements shared utility methods for FITS file processing (all public static).
+ *   This class implements static, shared, utility methods for FITS file processing.
  *
  *   Written by: Tom Hicks. 8/28/2019.
- *   Last Modified: Allow to get headers from other HDUs. Add isCatalogFile testing stub.
+ *   Last Modified: Split out FITS file dependent methods into separate fits file class.
  */
 class FitsUtils {
   static final Logger log = LogManager.getLogger(FitsUtils.class.getName());
@@ -86,73 +86,12 @@ class FitsUtils {
 
 
   /**
-   * Return a List of all non-comment (key/value pair) keywords in the header of the
-   * specified HDU of the given FITS file. By default, the first HDU is used.
-   */
-  public static List getHeaderKeys (Fits fits, whichHDU=0) {
-    log.trace("(FitsUtils.getHeaderKeys): fits=${fits}")
-    Header header = fits.getHDU(whichHDU).getHeader() // get the header from the specified HDU
-    return header.iterator().findAll{it.isKeyValuePair()}.collect{it.getKey()}
-  }
-
-  /**
-   * Return a Map of all non-comment (key/value pair) keywords and their values in the
-   * header of the specified HDU of the given FITS file. By default, the first HDU is used.
-   */
-  public static Map getHeaderFields (File aFile, whichHDU=0) {
-    log.trace("(FitsUtils.getHeaderFields): aFile=${aFile}")
-
-    Fits fits = FitsUtils.readFitsFile(aFile) // make FITS object from given FITS file
-    if (!fits)                                // if unable to open/read FITS file
-      return null                             // then signal failure
-
-    Header header = fits.getHDU(whichHDU).getHeader() // get the header from the specified HDU
-    return header.iterator().findAll{it.isKeyValuePair()}.collectEntries {
-      [ (it.getKey()) : it.getValue() ]
-    }
-  }
-
-
-  /** Tell whether the given File is a FITS catalog or not. */
-  public static boolean isCatalogFile (File aFile) {
-    log.trace("(FitsUtils.isCatalogFile): aFile=${aFile}")
-    // TODO: IMPLEMENT THIS METHOD FOR REAL
-    return aFile.getName().startsWith('JADE') // TODO: FIX THIS LATER, just for testing now
-  }
-
-
-  /**
-   * Open, read, and return a Fits object from the given File, which is assumed to be
-   * pointing to a valid, readable FITS file.
-   * Returns the new Fits object, or null if problems encountered.
-   */
-  public static Fits readFitsFile (File aFile) {
-    log.trace("(FitsUtils.readFitsFile): aFile=${aFile}")
-    Fits fits = null
-    if (aFile.getName().endsWith('.gz'))
-      fits = new Fits(new FileInputStream(aFile))
-    else
-      fits = new Fits(aFile)
-
-    try {
-      fits.read()                             // read the data into FITS object
-    }
-    catch (Exception iox) {
-      def msg = "Invalid FITS Header encountered in file '${aFile.getAbsolutePath()}'. File skipped."
-      Utils.logError('FitsUtils.readFitsFile', msg)
-      return null                           // signal unable to open/read FITS file
-    }
-
-    return fits                             // everything OK: return Fits object
-  }
-
-
-  /**
    * Convert the given string value to the given datatype. Allowed datatype values
    * are limited: "date", "double", "integer", "string".
+   * May throw IllegalArgumentException or NumberFormatException if conversion fails.
    */
   public static def stringToValue (String valueStr, String datatype) {
-    log.trace("(FitsUtils.stringToValue): valueStr='${valueStr}', datatype='${datatype}'")
+    log.trace("(FitsFile.stringToValue): valueStr='${valueStr}', datatype='${datatype}'")
 
     if ((valueStr == null) || !datatype)    // sanity check: need at least value and datatype
       return null                           // exit out now
@@ -165,7 +104,7 @@ class FitsUtils {
         value = valueStr as Double
       else if (datatype == 'string')
         value = valueStr
-      else if (datatype == 'date')
+      else if (datatype == 'date')          // this one conversion is FITS dependent
         value = new FitsDate(valueStr)      // FITS date = ISO-8601 w/o the trailing Z
       else {
         throw new IllegalArgumentException(
@@ -175,6 +114,8 @@ class FitsUtils {
       throw new NumberFormatException(
         "Unable to convert value '${valueStr}' to '${datatype}'.")
     }
+
+    return value                            // return the converted value
   }
 
 

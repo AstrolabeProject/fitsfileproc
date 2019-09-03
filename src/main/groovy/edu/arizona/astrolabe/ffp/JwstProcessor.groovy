@@ -9,7 +9,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Modify access URL for temporary Firefly compatability.
+ *   Last Modified: Update for new fits file class.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -63,6 +63,9 @@ class JwstProcessor implements IFitsFileProcessor {
       Read from a given external file or a default internal resource file. */
   private Map fitsAliases
 
+  /** The wrapper instance for the FITS file currently being processed. */
+  private FitsFile fitsFile
+
   /** An instance of IInformationOutputter for outputting the processed information. */
   private IInformationOutputter infoOutputter
 
@@ -99,19 +102,29 @@ class JwstProcessor implements IFitsFileProcessor {
     if (VERBOSE)
       log.info("(JwstProcessor.processAFile): Processing FITS file '${aFile.getAbsolutePath()}'")
 
-    if (FitsUtils.isCatalogFile(aFile))
-      return processACatalogFile(aFile)
+    // instantiate a new FITS file wrapper for the given file. */
+    try {
+      fitsFile = new FitsFile(aFile, config)
+    }
+    catch (Exception iox) {
+      def msg = "Unable to read file '${aFile.getAbsolutePath()}' as a FITS file. File skipped."
+      Utils.logError('JwstProcessor.processAFile', msg)
+      return 0                              // signal unable to process this file
+    }
+
+    if (fitsFile.isCatalogFile())
+      return processACatalogFile(aFile, fitsFile)
     else
-      return processAnImageFile(aFile)
+      return processAnImageFile(aFile, fitsFile)
   }
 
 
   /** Process the given FITS catalog file. */
-  public int processACatalogFile (File aFile) {
-    log.trace("(JwstProcessor.processACatalogFile): aFile=${aFile}")
+  private int processACatalogFile (File aFile, FitsFile fitsFile) {
+    log.trace("(JwstProcessor.processACatalogFile): aFile=${aFile}, fitsFile=${fitsFile}")
 
     // make a map of all FITS headers and value strings
-    Map headerFields = FitsUtils.getHeaderFields(aFile, 1) // catalog in second HDU
+    Map headerFields = fitsFile.getHeaderFields(1) // catalog in second HDU
     if (headerFields == null)               // if unable to read the FITS file headers
       return 0                              // then skip this file
     if (DEBUG) {                            // REMOVE LATER
@@ -123,11 +136,11 @@ class JwstProcessor implements IFitsFileProcessor {
 
 
   /** Process the given FITS image file. */
-  public int processAnImageFile (File aFile) {
-    log.trace("(JwstProcessor.processAnImageFile): aFile=${aFile}")
+  private int processAnImageFile (File aFile, FitsFile fitsFile) {
+    log.trace("(JwstProcessor.processAnImageFile): aFile=${aFile}, fitsFile=${fitsFile}")
 
     // make a map of all FITS headers and value strings
-    Map headerFields = FitsUtils.getHeaderFields(aFile)
+    Map headerFields = fitsFile.getHeaderFields() // defaults to first HDU
     if (headerFields == null)               // if unable to read the FITS file headers
       return 0                              // then skip this file
 
