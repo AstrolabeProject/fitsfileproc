@@ -28,24 +28,26 @@ class FitsFileProcessor {
   public static void main (String[] args) {
 
     // read, parse, and validate command line arguments
-    def usage = 'java -jar ffp.jar [-h] [-a aliases-file] [-f output-format] [-i info-file] [-t processor-type] [-o output-dir] (FITS-file|FITS-directory)..'
+    def usage = 'java -jar ffp.jar [-h] [-f output-format] [-o output-dir] (FITS-file|FITS-directory)..'
     def cli = new CliBuilder(usage: usage)
     cli.width = 100                         // increase usage message width
     cli.with {
-      a(longOpt:  'aliases', args:1, argName: 'filepath',
+      a(longOpt: 'aliases', args:1, argName: 'filepath',
         'File of aliases (FITS keyword to ObsCore keyword mappings) [default: "jwst-aliases"]')
-      d(longOpt: 'debug',
-        'Print debugging output in addition to normal processing [default: non debug mode]')
-      f(longOpt: 'format',  args:1, argName: 'output-format',
-        'Output format for processing results: "db", "json", or "sql" [default: "sql"]')
-      h(longOpt: 'help',     'Show usage information.')
-      i(longOpt: 'info',    args:1, argName: 'filepath',
-        'File listing information on fields to be processed [default: "jwst-fields"].')
-      o(longOpt: 'outdir',  args:1, argName: 'outdir',
+      d(longOpt: 'debug', 'Print debugging output during processing [default: non-debug mode]')
+      h(longOpt: 'help',  'Show usage information.')
+      fi(longOpt: 'field-info',  args:1, argName: 'filepath',
+         'Field information file for fields to be processed [default: "jwst-fields"].')
+      o(longOpt: 'outdir',  args:1, argName: 'dirpath',
         'Writeable directory in which to write the generated output file [default: "$PWD/out"].')
-      t(longOpt: 'type',    args:1, argName: 'processor-type',
-        'Which processor type to use [default: "jwst"]')
-      v(longOpt: 'verbose',  'Run in verbose mode [default: non verbose mode].')
+      of(longOpt: 'output-format',  args:1, argName: 'format',
+         'Output format for processing results: "db", "json", or "sql" [default: "sql"]')
+      sc(longOpt: 'skip-catalogs', 'Skip catalog processing [default: false]')
+      si(longOpt: 'skip-images',   'Skip image processing [default: false]')
+      p(longOpt: 'processor',    args:1, argName: 'processor-type',
+        'Name of processor to use [default: "jwst"]')
+      v(longOpt: 'verbose',
+        'Print informational messages during processing [default: non-verbose mode].')
     }
     def options = cli.parse(args)           // parse command line
 
@@ -61,7 +63,7 @@ class FitsFileProcessor {
     this.DEBUG = options.d ?: false
 
     // check for valid output format specification
-    String outputFormat = (options.f ?: 'sql').toLowerCase()
+    String outputFormat = (options.of ?: 'sql').toLowerCase()
     if (!OUTPUT_FORMATS.contains(outputFormat)) {
       System.err.println("ERROR: Output format argument must be one of: ${OUTPUT_FORMATS.join(', ')}")
       cli.usage()
@@ -72,7 +74,7 @@ class FitsFileProcessor {
     File aliasFile = validateAliasesFilepath(options.a ?: null)
 
     // if an external fields information filepath is given, check that it exists and is readable
-    File fieldsFile = validateFieldsFilepath(options.i ?: null)
+    File fieldsFile = validateFieldsFilepath(options.fi ?: null)
 
     // check that the given (or default) output directory exists and is writable
     def outputDir = options.o ?: 'out'
@@ -84,7 +86,9 @@ class FitsFileProcessor {
 
     // instantiate a specialized processor with the specified settings
     def settings = [ 'DEBUG': DEBUG, 'VERBOSE': VERBOSE,
-                     'outputDir': outputDir, 'outputFormat': outputFormat ]
+                     'outputDir': outputDir, 'outputFormat': outputFormat,
+                     'skipCatalogs': options.sc ?: false,
+                     'skipImages': options.si ?: false ]
     if (aliasFile)
       settings << [ 'aliasFile': aliasFile ]
     if (fieldsFile)

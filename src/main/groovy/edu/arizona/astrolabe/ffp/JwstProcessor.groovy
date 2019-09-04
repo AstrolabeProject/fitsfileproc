@@ -4,6 +4,10 @@ import java.io.*
 import java.util.zip.GZIPInputStream
 import org.apache.logging.log4j.*
 
+import uk.ac.starlink.fits.*
+import uk.ac.starlink.table.*
+import uk.ac.starlink.util.*
+
 /**
  * Astrolabe JWST-specific FITS file processor class.
  *   This class implements JWST-specific FITS file processing methods.
@@ -82,8 +86,9 @@ class JwstProcessor implements IFitsFileProcessor {
 
     // load the FITS field name aliases from a given file path or a default resource path.
     fitsAliases = loadAliases(config.aliasFile)
-    // if (DEBUG)
-    //   fitsAliases.each { entry -> System.err.println("${entry.key}=${entry.value}") }
+    if (log.isDebugEnabled())               // only with log4j debug
+      fitsAliases.each { entry -> log.debug("${entry.key}=${entry.value}") }
+
     infoOutputter = new InformationOutputter(configuration)
 
     // add some processor-specific settings to the configuration file
@@ -99,8 +104,8 @@ class JwstProcessor implements IFitsFileProcessor {
   public int processAFile (File aFile) {
     log.trace("(JwstProcessor.processAFile): aFile=${aFile}")
 
-    if (VERBOSE)
-      log.info("(JwstProcessor.processAFile): Processing FITS file '${aFile.getAbsolutePath()}'")
+    if (DEBUG)
+      log.info("(JwstProcessor.processAFile): Considering FITS file '${aFile.getAbsolutePath()}'")
 
     // instantiate a new FITS file wrapper for the given file. */
     try {
@@ -112,10 +117,25 @@ class JwstProcessor implements IFitsFileProcessor {
       return 0                              // signal unable to process this file
     }
 
-    if (fitsFile.isCatalogFile())
-      return processACatalogFile(aFile, fitsFile)
-    else
-      return processAnImageFile(aFile, fitsFile)
+    // figure out what type of FITS file this is and process it accordingly
+    if (fitsFile.isCatalogFile()) {
+      if (config.skipCatalogs) {
+        if (VERBOSE)
+          log.info("(JwstProcessor.processAFile): Skipping FITS catalog '${aFile.getAbsolutePath()}'")
+        return 0
+      }
+      else
+        return processACatalogFile(aFile, fitsFile)
+    }
+    else {
+      if (config.skipImages) {
+        if (VERBOSE)
+          log.info("(JwstProcessor.processAFile): Skipping FITS image '${aFile.getAbsolutePath()}'")
+        return 0
+      }
+      else
+        return processAnImageFile(aFile, fitsFile)
+    }
   }
 
 
@@ -123,13 +143,24 @@ class JwstProcessor implements IFitsFileProcessor {
   private int processACatalogFile (File aFile, FitsFile fitsFile) {
     log.trace("(JwstProcessor.processACatalogFile): aFile=${aFile}, fitsFile=${fitsFile}")
 
-    // make a map of all FITS headers and value strings
-    Map headerFields = fitsFile.getHeaderFields(1) // catalog in second HDU
-    if (headerFields == null)               // if unable to read the FITS file headers
-      return 0                              // then skip this file
-    if (DEBUG) {                            // REMOVE LATER
-      System.err.println("HDU 1 FIELDS(${headerFields.size()}):")
-      headerFields.each { key, val -> System.err.println("${key}: ${val}") }
+    if (VERBOSE)
+      log.info("(JwstProcessor.processACatalogFile): Processing FITS catalog '${aFile.getAbsolutePath()}'")
+
+    def ftb = new FitsTableBuilder()
+    def tbl = ftb.makeStarTable(new FileDataSource(aFile), false, StoragePolicy.getDefaultPolicy())
+    if (tbl != null) {
+      if (VERBOSE)
+        log.info("(processACatalogFile): rows=${tbl.getRowCount()} cols=${tbl.getColumnCount()}")
+
+      def rowSeq = tbl.getRowSequence()     // get the iterator of table rows
+
+      def cnt = 0
+      while (rowSeq.next()) {               // while rows remain, output them
+        infoOutputter.outputRow(rowSeq.getRow())
+        cnt += 1
+      }
+      if (VERBOSE)
+        log.info("(JwstProcessor.processACatalogFile): Processed ${cnt} rows")
     }
     return 1                                // successfully processed one more file
   }
@@ -139,10 +170,18 @@ class JwstProcessor implements IFitsFileProcessor {
   private int processAnImageFile (File aFile, FitsFile fitsFile) {
     log.trace("(JwstProcessor.processAnImageFile): aFile=${aFile}, fitsFile=${fitsFile}")
 
+    if (VERBOSE)
+      log.info("(JwstProcessor.processAnImageFile): Processing FITS image '${aFile.getAbsolutePath()}'")
+
     // make a map of all FITS headers and value strings
     Map headerFields = fitsFile.getHeaderFields() // defaults to first HDU
     if (headerFields == null)               // if unable to read the FITS file headers
       return 0                              // then skip this file
+
+    if (log.isDebugEnabled()) {             // only with log4j debug
+      log.debug("(JwstProcessor.processAnImageFile): Read ${headerFields.size()} FITS metadata fields:")
+      headerFields.each { entry -> log.debug("${entry.key}=${entry.value}") }
+    }
 
     // Data structure defining information for fields processed by this processor.
     // Loads the field information from a given file or a default resource path.
@@ -170,9 +209,6 @@ class JwstProcessor implements IFitsFileProcessor {
 
       // try to compute values for computable fields which are still missing values
       computeValuesForFields(headerFields, fieldsInfo)
-      // if (DEBUG) {
-      //   fieldsInfo.each { entry -> System.err.println("${entry.key}=${entry.value}") }
-      // }
 
       // do some checks for required fields
       ensureRequiredFields(fieldsInfo)
@@ -539,7 +575,7 @@ class JwstProcessor implements IFitsFileProcessor {
     else                                    // else fallback to default resource
       aliasStream = this.getClass().getResourceAsStream(DEFAULT_ALIASES_FILEPATH);
 
-    if (VERBOSE)
+    if (DEBUG)
       log.info("(JwstProcessor.loadAliases): Reading aliases from: ${aliasFilepath}")
 
     def inSR = new InputStreamReader(aliasStream, 'UTF8')
@@ -559,7 +595,7 @@ class JwstProcessor implements IFitsFileProcessor {
       }
     }
 
-    if (VERBOSE)
+    if (DEBUG)
       log.info("(JwstProcessor.loadAliases): Read ${aliasCnt} field name aliases.")
 
     return aliases

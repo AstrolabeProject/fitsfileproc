@@ -17,7 +17,9 @@ class InformationOutputter implements IInformationOutputter {
   private static final String SQL_COMMENT = '--'
 
   // TODO: LATER read DB parameters from somewhere:
-  private final String tableName = 'sia.jwst'
+  private final String imageTableName = 'sia.jwst'
+  private final String catalogTableName = 'sia.jcat'
+  private final String isPublicValue = '0'  // 0 means is_public = false
 
   /** Debug setting: when true, show internal information for debugging. */
   private boolean DEBUG   = false
@@ -50,7 +52,7 @@ class InformationOutputter implements IInformationOutputter {
   }
 
   /** Output the given field information using the current output settings. */
-  void outputInformation (FieldsInfo fieldsInfo) {
+  public void outputInformation (FieldsInfo fieldsInfo) {
     if (outputFormat in ['sql', 'json']) {
       outputFile.append(makeFileInfo(fieldsInfo))
       outputFile.append('\n')
@@ -60,10 +62,19 @@ class InformationOutputter implements IInformationOutputter {
   }
 
   /** Load the given field information directly into a PostgreSQL database. */
-  void intoPostgres (FieldsInfo fieldsInfo) {
+  public void intoPostgres (FieldsInfo fieldsInfo) {
     // TODO: IMPLEMENT LATER
   }
 
+  /** Output the given catalog row using the current output settings. */
+  public void outputRow (Object[] row) {
+    log.trace("(InformationOutputter.outputRow): row=${row}")
+    if (outputFormat == 'sql') {
+      outputFile.append(toSQL(row))
+      outputFile.append('\n')
+    }
+    // TODO: handle JSON
+  }
 
   /**
    * Return a unique output filepath, within the specified directory, for the result file.
@@ -81,7 +92,9 @@ class InformationOutputter implements IInformationOutputter {
     if (outputFormat == 'sql') {
       return toSQL(fieldsInfo)
     }
-    // TODO: handle JSON
+    else if (outputFormat == 'json') {
+      return toJSON(fieldsInfo)
+    }
   }
 
 
@@ -114,21 +127,40 @@ class InformationOutputter implements IInformationOutputter {
   }
 
 
-  /** Return the given file information formatted as an SQL string. */
+  /** Return the given field information formatted as an SQL string. */
   private String toSQL (FieldsInfo fieldsInfo) {
     log.trace("(InformationOutputter.toSQL): fieldsInfo=${fieldsInfo}")
     def valued = fieldsInfo.findAll { key, fieldInfo -> fieldInfo.hasValue() }
     def keys = valued.keySet().join(', ')
     def vals = valued.values().collect{it['value']}
     def values = vals.collect {(it instanceof String) ? "'${it}'" : it}.join(', ')
-    return "insert into ${tableName} (${keys}) values (${values});"
+    return "insert into ${imageTableName} (${keys}) values (${values});"
   }
 
-  /** Return the given file information formatted as a JSON string. */
+  /** Return the given field information formatted as a JSON string. */
   private String toJSON (FieldsInfo fieldsInfo) {
     log.trace("(InformationOutputter.toJSON): fieldsInfo=${fieldsInfo}")
+    return "[]"                             // JSON NOT YET IMPLEMENTED
   }
 
+  /** Return the given catalog row formatted as an SQL string. */
+  private String toSQL (Object[] row) {
+    log.trace("(InformationOutputter.toSQL): row=${row}")
+    StringBuffer buf = new StringBuffer()
+    buf.append("insert into ${catalogTableName} values (")
+    row.each { col ->
+      buf.append(col)
+      buf.append(',')
+    }
+    buf.append("${isPublicValue});")        // add the is_public flag last
+    return buf.toString()
+  }
+
+  /** Return the given catalog row formatted as a JSON string. */
+  private String toJSON (Object[] row) {
+    log.trace("(InformationOutputter.toJSON): row=${row}")
+    return "[]"                             // JSON NOT YET IMPLEMENTED
+  }
 }
 
 
@@ -140,8 +172,11 @@ interface IInformationOutputter {
   static final String FILE_INFO_KEYWORD = '_FILE_INFO_'
 
   /** Output the given field information using the current output settings. */
-  void outputInformation (FieldsInfo fieldsInfo);
+  public void outputInformation (FieldsInfo fieldsInfo);
 
   /** Load the given field information directly into a PostgreSQL database. */
-  void intoPostgres (FieldsInfo fieldsInfo);
+  public void intoPostgres (FieldsInfo fieldsInfo);
+
+  /** Output the given catalog row using the current output settings. */
+  public void outputRow (Object[] row);
 }
