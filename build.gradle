@@ -27,6 +27,7 @@ dependencies {
   implementation 'org.apache.logging.log4j:log4j-api:2.12.1'
   implementation 'gov.nasa.gsfc.heasarc:nom-tam-fits:1.15.2'
   implementation fileTree(dir: 'libs', include: whichLib)
+  implementation fileTree(dir: 'libs', include: '*.jar', exclude: 'cadc-wcs*')
   testCompile 'junit:junit'
 }
 
