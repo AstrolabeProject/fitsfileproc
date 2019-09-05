@@ -13,7 +13,7 @@ import uk.ac.starlink.util.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Update for new fits file class.
+ *   Last Modified: Update for enhanced catalog output.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -150,18 +150,24 @@ class JwstProcessor implements IFitsFileProcessor {
     def tbl = ftb.makeStarTable(new FileDataSource(aFile), false, StoragePolicy.getDefaultPolicy())
     if (tbl != null) {
       if (VERBOSE)
-        log.info("(processACatalogFile): rows=${tbl.getRowCount()} cols=${tbl.getColumnCount()}")
+        log.info("(JwstProcessor.processACatalogFile): rows=${tbl.getRowCount()} cols=${tbl.getColumnCount()}")
 
+      infoOutputter.outputCatalogHeader(aFile) // begin the output of the catalog info
+
+      // output the individual rows in sequence to reduce memory usage
       def rowSeq = tbl.getRowSequence()     // get the iterator of table rows
-
       def cnt = 0
       while (rowSeq.next()) {               // while rows remain, output them
-        infoOutputter.outputRow(rowSeq.getRow())
+        infoOutputter.outputCatalogRow(rowSeq.getRow())
         cnt += 1
       }
+
+      infoOutputter.outputCatalogFooter() // end the output of the catalog info
+
       if (VERBOSE)
         log.info("(JwstProcessor.processACatalogFile): Processed ${cnt} rows")
     }
+
     return 1                                // successfully processed one more file
   }
 
@@ -214,7 +220,7 @@ class JwstProcessor implements IFitsFileProcessor {
       ensureRequiredFields(fieldsInfo)
 
       // output the extracted field information
-      infoOutputter.outputInformation(fieldsInfo)
+      infoOutputter.outputImageInfo(fieldsInfo)
     }
     catch (AbortFileProcessingException afpx) {
       def msg =
