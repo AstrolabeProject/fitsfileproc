@@ -38,6 +38,9 @@ rund:
 runq:
 	@docker run -d --rm --name ffp -v $(PWD)/images:/images -v $(PWD)/out:/out ffp
 
+run-sc:
+	docker run -it --rm --name ffp -v $(PWD)/images:/images -v $(PWD)/out:/out ffp -v -sc -o /out /images
+
 testjar: $(BUILDJAR)
 	mkdir -p out
 	java -jar $(BUILDJAR) -v -o out images
