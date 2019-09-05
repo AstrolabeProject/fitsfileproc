@@ -9,5 +9,7 @@ RUN apt-get update \
 RUN mkdir -p /images /out
 COPY ./build/libs/fitsfileprocessor.jar /
 
+ENV _JAVA_OPTIONS -Xms1024m -Xmx8192m
+
 ENTRYPOINT [ "java", "-jar", "fitsfileprocessor.jar" ]
 CMD [ "-v", "-o", "/out", "/images" ]
