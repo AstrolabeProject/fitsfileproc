@@ -4,11 +4,12 @@ GSRC = src/main/groovy/edu/arizona/astrolabe/ffp/*.groovy
 NAME=ffp
 NET=vos_net
 
-.PHONY: help build clean cleanout exec reset run-bash run runq run-sc rundb rundbq rundb-sc watch
+.PHONY: help build clean cleanout exec reset run-bash run-mnt run-mnt-sc run-db run-db-q run-db-sc watch
 
 help:
-	@echo "Make what? Try: build, clean, cleanout, docker, exec, jar, macjar, reset, run-bash"
-	@echo "                run, runq, run-sc, rundb, rundbq, rundb-sc, testjar, testjardb, watch"
+	@echo "Make what? build, clean, cleanout, docker, exec, jar, macjar, reset,"
+	@echo "           run-bash, run-mnt, run-mnt-sc, run-db, run-db-q, run-db-sc,"
+	@echo "           testjar-mnt, testjar-db, watch"
 
 build:
 	gradle clean build
@@ -32,31 +33,28 @@ reset:
 	docker rm -f ${NAME}
 
 run-bash:
-	docker run -it --rm --name ${NAME} -v ${PWD}/images:/images -v ${PWD}/out:/out --entrypoint /bin/bash ${IMG}
+	docker run -it --rm --network ${NET} --name ${NAME} -v ${PWD}/images:/images -v ${PWD}/out:/out --entrypoint /bin/bash ${IMG}
 
-run:
-	docker run -it --rm --name ${NAME} -v ${PWD}/images:/images -v ${PWD}/out:/out ${IMG}
+run-mnt:
+	docker run -it --rm --name ${NAME} -v ${PWD}/images:/images -v ${PWD}/out:/out ${IMG} --verbose
 
-runq:
-	@docker run -d --rm --name ${NAME} -v ${PWD}/images:/images -v ${PWD}/out:/out ${IMG}
-
-run-sc:
+run-mnt-sc:
 	docker run -it --rm --name ${NAME} -v ${PWD}/images:/images -v ${PWD}/out:/out ${IMG} --verbose -sc -o /out /images
 
-rundb:
-	docker run -it --rm --name ${NAME} -v ${PWD}/images:/images ${IMG} --verbose -of db /images
+run-db:
+	docker run -it --rm --network ${NET} --name ${NAME} -v ${PWD}/images:/images ${IMG} --verbose -of db /images
 
-rundbq:
-	@docker run -d --rm --name ${NAME} -v ${PWD}/images:/images ${IMG} -of db /images
+run-db-q:
+	@docker run -d --rm --network ${NET} --name ${NAME} -v ${PWD}/images:/images ${IMG} -of db /images
 
-rundb-sc:
-	docker run -it --rm --name ${NAME} -v ${PWD}/images:/images ${IMG} --verbose -sc -of db /images
+run-db-sc:
+	docker run -it --rm --network ${NET} --name ${NAME} -v ${PWD}/images:/images ${IMG} --verbose -sc -of db /images
 
-testjar: macjar
+testjar-mnt: macjar
 	mkdir -p out
 	java -jar ${BUILDJAR} --verbose -o out images
 
-testjardb: macjar
+testjar-db: macjar
 	java -jar ${BUILDJAR} --verbose -of db -db ${PWD}/src/test/resources/db.properties images
 
 watch:
