@@ -13,7 +13,7 @@ import groovy.transform.InheritConstructors
  *   This class parses and validates its arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Refactor information outputter interface to default information outputter.
+ *   Last Modified: Update argument processing for DB storage option.
  */
 class FitsFileProcessor {
 
@@ -35,11 +35,13 @@ class FitsFileProcessor {
       a(longOpt: 'aliases', args:1, argName: 'filepath',
         'File of aliases (FITS keyword to ObsCore keyword mappings) [default: "jwst-aliases"]')
       d(longOpt: 'debug', 'Print debugging output during processing [default: non-debug mode]')
+      db(longOpt: 'dbconfig', args:1, argName: 'filepath',
+        'Database configuration properties file [default: "jwst-dbconfig"]')
       h(longOpt: 'help',  'Show usage information.')
       fi(longOpt: 'field-info',  args:1, argName: 'filepath',
-         'Field information file for fields to be processed [default: "jwst-fields"].')
+         'Field information file for fields to be processed [default: "jwst-fields"]')
       o(longOpt: 'outdir',  args:1, argName: 'dirpath',
-        'Writeable directory in which to write the generated output file [default: "$PWD/out"].')
+        'Writeable directory in which to write any generated output file [no default]')
       of(longOpt: 'output-format',  args:1, argName: 'format',
          'Output format for processing results: "db", "json", or "sql" [default: "sql"]')
       sc(longOpt: 'skip-catalogs', 'Skip catalog processing [default: false]')
@@ -71,28 +73,37 @@ class FitsFileProcessor {
     }
 
     // if an external aliases filepath is given, check that it exists and is readable
-    File aliasFile = validateAliasesFilepath(options.a ?: null)
+    File aliasFile = validateFilepath(options.a ?: null, 'aliases')
+
+    // if an external database config filepath is given, check that it exists and is readable
+    File dbConfigFile = validateFilepath(options.db ?: null, 'database configuration')
 
     // if an external fields information filepath is given, check that it exists and is readable
-    File fieldsFile = validateFieldsFilepath(options.fi ?: null)
+    File fieldsFile = validateFilepath(options.fi ?: null, 'fields info')
 
     // check that the given (or default) output directory exists and is writable
-    def outputDir = options.o ?: 'out'
-    if (!FileUtils.goodDirPath(outputDir, true)) {    // test for writable directory
-      System.err.println(
-        "ERROR: Directory '${outputDir}' must exist and be writable. Exiting...")
-      System.exit(4)
+    def outputDir = options.o
+    if (outputDir) {                        // if an output directory specified
+      if (!FileUtils.goodDirPath(outputDir, true)) { // test for writable directory
+        System.err.println(
+          "ERROR: Given output directory '${outputDir}' must exist and be writable. Exiting...")
+        System.exit(4)
+      }
     }
 
     // instantiate a specialized processor with the specified settings
     def settings = [ 'DEBUG': DEBUG, 'VERBOSE': VERBOSE,
-                     'outputDir': outputDir, 'outputFormat': outputFormat,
+                     'outputFormat': outputFormat,
                      'skipCatalogs': options.sc ?: false,
                      'skipImages': options.si ?: false ]
     if (aliasFile)
       settings << [ 'aliasFile': aliasFile ]
+    if (dbConfigFile)
+      settings << [ 'dbConfigFile': dbConfigFile ]
     if (fieldsFile)
       settings << [ 'fieldsFile': fieldsFile ]
+    if (outputDir)
+      settings << [ 'outputDir': outputDir ]
 
     // figure out which processor will be used on the input files (currently only one is available):
     IFitsFileProcessor processor = null
@@ -184,48 +195,27 @@ class FitsFileProcessor {
 
 
   /**
-   * Checks the given aliases filepath for validity, as follows:
+   * Checks the given filepath for validity, as follows:
    *   if given a null or empty filepath, return null,
    *   if given a non-empty filepath, validate the readability of the file:
    *     if file is readable, return a Java File object for the file,
    *     else exit the program immediately with an error message and exit code.
-   * NB: an invalid aliases filepath will cause the program to terminate here!
+   * NB: an invalid filepath will cause the program to terminate here!
    */
-  static File validateAliasesFilepath (String filepath) {
-    log.trace("(FitsFileProcessor.validateAliasesFilepath): filepath=$filepath")
-    File aliasFile = null
+  static File validateFilepath (String filepath, String fileDesc='') {
+    log.trace("(FitsFileProcessor.validateFilepath): filepath=$filepath")
+    File theFile = null
     if (filepath) {
-      aliasFile = FileUtils.goodFilePath(filepath)
-      if (!aliasFile) {
+      theFile = FileUtils.goodFilePath(filepath)
+      if (!theFile) {
         System.err.println(
-          "ERROR: Unable to find and read the specified aliases file '${filepath}'. Exiting...")
+          "ERROR: Unable to find and read the specified ${fileDesc} file '${filepath}'. Exiting...")
         System.exit(10)
       }
     }
-    return aliasFile
+    return theFile
   }
 
-  /**
-   * Checks the given fields filepath for validity, as follows:
-   *   if given a null or empty filepath, return null,
-   *   if given a non-empty filepath, validate the readability of the file:
-   *     if file is readable, return a Java File object for the file,
-   *     else exit the program immediately with an error message and exit code.
-   * NB: an invalid fields filepath will cause the program to terminate here!
-   */
-  static File validateFieldsFilepath (String filepath) {
-    log.trace("(FitsFileProcessor.validateFieldsFilepath): filepath=$filepath")
-    File fieldsFile = null
-    if (filepath) {
-      fieldsFile = FileUtils.goodFilePath(filepath)
-      if (!fieldsFile) {
-        System.err.println(
-          "ERROR: Unable to find and read the specified fields info file '${filepath}'. Exiting...")
-        System.exit(11)
-      }
-    }
-    return fieldsFile
-  }
 
   /** Return a (possibly empty) list of valid file/directory paths. */
   static List validatePathStrings (List pathStrings) {

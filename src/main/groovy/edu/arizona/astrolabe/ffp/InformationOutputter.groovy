@@ -4,11 +4,13 @@ import java.io.*
 import java.text.SimpleDateFormat
 import org.apache.logging.log4j.*
 
+import groovy.sql.Sql
+
 /**
  * Class to implement general output methods for the Astrolabe FITS File Processor project.
  *
  *   Written by: Tom Hicks. 8/5/2019.
- *   Last Modified: Enhance output interface for catalogs: add header and footer output.
+ *   Last Modified: Begin to implement DB storage.
  */
 class InformationOutputter implements IInformationOutputter {
   static final Logger log = LogManager.getLogger(InformationOutputter.class.getName());
@@ -39,6 +41,9 @@ class InformationOutputter implements IInformationOutputter {
   /** List of field names to skip when outputting fields. */
   private List skipFieldList = [ ]
 
+  /** Database manipulation facade class. */
+  private Sql SQL = null
+
 
   /** Public constructor taking a map of configuration settings. */
   public InformationOutputter (configuration) {
@@ -47,20 +52,42 @@ class InformationOutputter implements IInformationOutputter {
     DEBUG = configuration.DEBUG ?: false
     VERBOSE = configuration.VERBOSE ?: false
     outputFormat = configuration?.outputFormat
-    def outputDir = configuration.outputDir ?: 'out'
-    outputFile = new File(genOutputFilePath(outputDir))
+    if (outputFormat != 'db') {             // if writing to a file
+      def outputDir = configuration.outputDir ?: 'out'
+      outputFile = new File(genOutputFilePath(outputDir))
+    }
+    else {                                  // writing to database
+      SQL = initializeDatabase(configuration)
+    }
   }
 
 
-  /** Load the given field information directly into a PostgreSQL database. */
-  public void intoPostgres (FieldsInfo fieldsInfo) {
+  /**
+   * Read the database properties file and return a groovy.sql.Sql facade class.
+   * Returns null if any problems are encountered.
+   */
+  private Sql initializeDatabase (configuration) {
+    def dbProps = configuration.dbProperties
+    if (dbProps) {
+      return Sql.newInstance(dbProps.url, dbProps.user, dbProps.password, dbProps.driverClassName)
+    }
+    else
+      throw new IllegalArgumentException(
+      "(InformationOutputter.initializeDatabase): Configuration is missing database properties")
+  }
+
+
+  /** Load the given field information directly into a database. */
+  public void storeImageInfo (FieldsInfo fieldsInfo) {
     // TODO: IMPLEMENT LATER
   }
 
 
   /** Output the given field information using the current output settings. */
   public void outputImageInfo (FieldsInfo fieldsInfo) {
-    if (outputFormat == 'sql') {
+    if (outputFormat == 'db')               // if writing to database
+      storeImageInfo(fieldsInfo)
+    else if (outputFormat == 'sql') {
       outputFile.append(makeFileInfo(fieldsInfo))
       outputFile.append('\n')
       outputFile.append(makeDataLine(fieldsInfo))
@@ -208,8 +235,8 @@ interface IInformationOutputter {
   /** The special keyword for input file information in the field information map. */
   static final String FILE_INFO_KEYWORD = '_FILE_INFO_'
 
-  /** Load the given field information directly into a PostgreSQL database. */
-  public void intoPostgres (FieldsInfo fieldsInfo);
+  /** Load the given field information directly into a database. */
+  public void storeImageInfo (FieldsInfo fieldsInfo);
 
   /** Output the given field information using the current output settings. */
   public void outputImageInfo (FieldsInfo fieldsInfo);

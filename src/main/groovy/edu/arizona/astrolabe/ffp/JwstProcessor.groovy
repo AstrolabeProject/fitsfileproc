@@ -13,7 +13,7 @@ import uk.ac.starlink.util.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Update for enhanced catalog output.
+ *   Last Modified: Update for DB storage option.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -32,6 +32,9 @@ class JwstProcessor implements IFitsFileProcessor {
 
   /** Default resource file for header keyword aliases. */
   static final String DEFAULT_ALIASES_FILEPATH = '/jwst-aliases.txt'
+
+  /** Default resource Properties file for database connection information. */
+  static final String DEFAULT_DBCONFIG_FILEPATH = '/jwst-dbconfig.properties'
 
   /** Default resource file for header field information. */
   static final String DEFAULT_FIELDS_FILEPATH = '/jwst-fields.txt'
@@ -89,11 +92,24 @@ class JwstProcessor implements IFitsFileProcessor {
     if (log.isDebugEnabled())               // only with log4j debug
       fitsAliases.each { entry -> log.debug("${entry.key}=${entry.value}") }
 
-    infoOutputter = new InformationOutputter(configuration)
+    def dbProperties = loadDatabaseProperties(configuration.dbConfigFile)
+    if (log.isDebugEnabled())
+      log.debug("DbProperties: ${dbProperties}")
 
     // add some processor-specific settings to the configuration file
     config << [ 'fieldInfoColumnNames': ['obsCoreKey', 'datatype', 'required', 'default'] ]
-    config << [ 'defaultFieldsFilepath': '/jwst-fields.txt' ]
+    config << [ 'defaultFieldsFilepath': DEFAULT_FIELDS_FILEPATH ]
+    config << [ 'dbProperties': dbProperties ]
+
+    // Instantiate an instance of InformationOutputter or exit if unable to do so
+    try {
+      infoOutputter = new InformationOutputter(configuration)
+    }
+    catch (RuntimeException rtx) {
+      def msg = "Unable to create an InformationOutputter from this configuration: ${configuration}"
+      Utils.logError('JwstProcessor.ctor', msg)
+      System.exit(100)
+    }
 
     // instantiate a factory to load field information
     fieldsInfoFactory = new FieldsInfoFactory(config)
@@ -608,6 +624,25 @@ class JwstProcessor implements IFitsFileProcessor {
   }
 
 
+  /** Return database properties read from a specified file or default resource. */
+  private Properties loadDatabaseProperties (File dbConfigFile=null) {
+    def dbProperties = new Properties()
+    def configStream
+    def configFilepath = DEFAULT_DBCONFIG_FILEPATH
+
+    if (dbConfigFile) {                     // if given external config file, use it
+      configStream = new FileInputStream(dbConfigFile)
+      configFilepath = dbConfigFile.getAbsolutePath() // reset to given path
+    }
+    else                                    // else fallback to default resource file
+      configStream = this.getClass().getResourceAsStream(configFilepath);
+
+    dbProperties.load(configStream)
+    configStream.close()
+    return dbProperties
+  }
+
+
   /**
    * Read the file containing information about the fields processed by this program,
    * and return the fields in a map. Loads the field information from the given file
@@ -624,8 +659,8 @@ class JwstProcessor implements IFitsFileProcessor {
       fieldStream = new FileInputStream(fieldsFile)
       fieldsFilepath = fieldsFile.getAbsolutePath()
     }
-    else                                    // else fallback to default resource
-      fieldStream = this.getClass().getResourceAsStream(DEFAULT_FIELDS_FILEPATH);
+    else                                    // else fallback to default resource file
+      fieldStream = this.getClass().getResourceAsStream(fieldsFilepath);
 
     if (DEBUG)
       log.info("(JwstProcessor.loadFieldsInfo): Reading field information from: ${fieldsFilepath}")
