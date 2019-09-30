@@ -13,13 +13,13 @@ import groovy.transform.InheritConstructors
  *   This class parses and validates its arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Add post-processing cleanup task to processor interface.
+ *   Last Modified: Make DB the default output format. Prepare for CSV.
  */
 class FitsFileProcessor {
 
   static final Logger log = LogManager.getLogger(FitsFileProcessor.class.getName());
   static final List FILE_TYPES = ['.fits', '.fits.gz']
-  static final List OUTPUT_FORMATS = ['db', 'json', 'sql']
+  static final List OUTPUT_FORMATS = ['db', 'csv', 'json', 'sql']
 
   static boolean DEBUG   = false
   static boolean VERBOSE = false
@@ -43,7 +43,7 @@ class FitsFileProcessor {
       o(longOpt: 'outdir',  args:1, argName: 'dirpath',
         'Writeable directory in which to write any generated output file [no default]')
       of(longOpt: 'output-format',  args:1, argName: 'format',
-         'Output format for processing results: "db", "json", or "sql" [default: "sql"]')
+         'Output format for processing results: "db", "csv", "json", or "sql" [default: "db"]')
       sc(longOpt: 'skip-catalogs', 'Skip catalog processing [default: false]')
       si(longOpt: 'skip-images',   'Skip image processing [default: false]')
       p(longOpt: 'processor',    args:1, argName: 'processor-type',
@@ -65,7 +65,7 @@ class FitsFileProcessor {
     this.DEBUG = options.d ?: false
 
     // check for valid output format specification
-    String outputFormat = (options.of ?: 'sql').toLowerCase()
+    String outputFormat = (options.of ?: 'db').toLowerCase()
     if (!OUTPUT_FORMATS.contains(outputFormat)) {
       System.err.println("ERROR: Output format argument must be one of: ${OUTPUT_FORMATS.join(', ')}")
       cli.usage()

@@ -36,26 +36,26 @@ run-bash:
 	docker run -it --rm --network ${NET} --name ${NAME} -v ${PWD}/images:/images -v ${PWD}/out:/out --entrypoint /bin/bash ${IMG}
 
 run-mnt:
-	docker run -it --rm --name ${NAME} -v ${PWD}/images:/images -v ${PWD}/out:/out ${IMG} --verbose
+	docker run -it --rm --name ${NAME} -v ${PWD}/images:/images -v ${PWD}/out:/out ${IMG} --verbose -of sql
 
 run-mnt-sc:
-	docker run -it --rm --name ${NAME} -v ${PWD}/images:/images -v ${PWD}/out:/out ${IMG} --verbose -sc -o /out /images
+	docker run -it --rm --name ${NAME} -v ${PWD}/images:/images -v ${PWD}/out:/out ${IMG} --verbose -sc -of sql -o /out /images
 
 run-db:
 	docker run -it --rm --network ${NET} --name ${NAME} -v ${PWD}/images:/images ${IMG} --verbose -of db /images
 
 run-db-q:
-	@docker run -d --rm --network ${NET} --name ${NAME} -v ${PWD}/images:/images ${IMG} -of db /images
+	@docker run -d --rm --network ${NET} --name ${NAME} -v ${PWD}/images:/images ${IMG} /images
 
 run-db-sc:
-	docker run -it --rm --network ${NET} --name ${NAME} -v ${PWD}/images:/images ${IMG} --verbose -sc -of db /images
+	docker run -it --rm --network ${NET} --name ${NAME} -v ${PWD}/images:/images ${IMG} --verbose -sc /images
 
 testjar-mnt: macjar
 	mkdir -p out
-	java -jar ${BUILDJAR} --verbose -o out images
+	java -jar ${BUILDJAR} --verbose -of sql -o out images
 
 testjar-db: macjar
-	java -jar ${BUILDJAR} --verbose -of db -db ${PWD}/src/test/resources/db.properties images
+	java -jar ${BUILDJAR} --verbose -db ${PWD}/src/test/resources/db.properties images
 
 watch:
 	docker logs -f ${NAME}

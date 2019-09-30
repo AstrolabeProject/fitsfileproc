@@ -11,7 +11,7 @@ import groovy.sql.Sql
  * Class to implement general output methods for the Astrolabe FITS File Processor project.
  *
  *   Written by: Tom Hicks. 8/5/2019.
- *   Last Modified: Implement store of catalog information directly into database.
+ *   Last Modified: Make DB the default output format. Prepare for CSV.
  */
 class InformationOutputter implements IInformationOutputter {
   static final Logger log = LogManager.getLogger(InformationOutputter.class.getName());
@@ -35,8 +35,8 @@ class InformationOutputter implements IInformationOutputter {
   /** An output file created within the output directory. */
   private File outputFile = null
 
-  /** A string specifying the output. */
-  private String outputFormat = 'sql'
+  /** A string specifying the output format. */
+  private String outputFormat = 'db'
 
   /** List of field names to skip when outputting fields. */
   private List skipFieldList = [ ]
@@ -72,55 +72,56 @@ class InformationOutputter implements IInformationOutputter {
   /** Output the given field information using the current output settings. */
   public void outputImageInfo (FieldsInfo fieldsInfo) {
     log.trace("(InformationOutputter.outputImageInfo): fieldsInfo=${fieldsInfo}")
-    if (outputFormat == 'db')               // if writing to database
+    if (outputFormat == 'db') {             // if writing to database
       storeImageInfo(fieldsInfo)
+    }
     else if (outputFormat == 'sql') {
       outputFile.append(makeFileInfo(fieldsInfo))
       outputFile.append('\n')
       outputFile.append(makeDataLine(fieldsInfo))
       outputFile.append('\n')
     }
-    // TODO: handle JSON
+    // TODO: handle JSON and CSV
   }
 
 
   /** Begin the output of the catalog information using the current output settings. */
   public void outputCatalogHeader (File aFile) {
     log.trace("(InformationOutputter.outputCatalogHeader): aFile=${aFile}")
-    if (outputFormat == 'sql') {
+    if (outputFormat == 'db') {
+      SQL.execute('begin;')
+    }
+    else if (outputFormat == 'sql') {
       outputFile.append('begin;\n')
       outputFile.append(makeFileInfo(aFile))
       outputFile.append('\n')
     }
-    else if (outputFormat == 'db') {
-      SQL.execute('begin;')
-    }
-    // TODO: handle JSON
+    // TODO: handle JSON and CSV
   }
 
   /** Output the given catalog row using the current output settings. */
   public void outputCatalogRow (Object[] row) {
     log.trace("(InformationOutputter.outputCatalogRow): row=${row}")
-    if (outputFormat == 'sql') {
+    if (outputFormat == 'db') {
+      SQL.execute(toSQL(row))
+    }
+    else if (outputFormat == 'sql') {
       outputFile.append(toSQL(row))
       outputFile.append('\n')
     }
-    else if (outputFormat == 'db') {
-      SQL.execute(toSQL(row))
-    }
-    // TODO: handle JSON
+    // TODO: handle JSON and CSV
   }
 
   /** End the output of the catalog information using the current output settings. */
   public void outputCatalogFooter () {
     log.trace("(InformationOutputter.outputCatalogFooter)")
-    if (outputFormat == 'sql') {
-      outputFile.append('commit;\n')
-    }
-    else if (outputFormat == 'db') {
+    if (outputFormat == 'db') {
       SQL.execute('commit;')
     }
-    // TODO: handle JSON
+    else if (outputFormat == 'sql') {
+      outputFile.append('commit;\n')
+    }
+    // TODO: handle JSON and CSV
   }
 
 
@@ -174,10 +175,13 @@ class InformationOutputter implements IInformationOutputter {
   /** Return a string which formats the given field information. */
   private String makeDataLine (FieldsInfo fieldsInfo) {
     log.trace("(InformationOutputter.makeDataLine): fieldsInfo=${fieldsInfo}")
-    if (outputFormat == 'json') {
+    if (outputFormat == 'csv') {
+      return toCSV(fieldsInfo)
+    }
+    else if (outputFormat == 'json') {
       return toJSON(fieldsInfo)
     }
-    else
+    else                                    // make SQL for file OR database
       return toSQL(fieldsInfo)
   }
 
@@ -220,10 +224,22 @@ class InformationOutputter implements IInformationOutputter {
       }
     }
 
-    // TODO: handle JSON
+    // TODO: handle JSON and CSV
     return buf.toString()
   }
 
+
+  /** Return the given field information formatted as a CSV string. */
+  private String toCSV (FieldsInfo fieldsInfo) {
+    log.trace("(InformationOutputter.toCSV): fieldsInfo=${fieldsInfo}")
+    return ''                               // CSV NOT YET IMPLEMENTED
+  }
+
+  /** Return the given field information formatted as a JSON string. */
+  private String toJSON (FieldsInfo fieldsInfo) {
+    log.trace("(InformationOutputter.toJSON): fieldsInfo=${fieldsInfo}")
+    return '[]'                             // JSON NOT YET IMPLEMENTED
+  }
 
   /** Return the given field information formatted as an SQL string. */
   private String toSQL (FieldsInfo fieldsInfo) {
@@ -235,10 +251,17 @@ class InformationOutputter implements IInformationOutputter {
     return "insert into ${imageTableName} (${keys}) values (${values});"
   }
 
-  /** Return the given field information formatted as a JSON string. */
-  private String toJSON (FieldsInfo fieldsInfo) {
-    log.trace("(InformationOutputter.toJSON): fieldsInfo=${fieldsInfo}")
-    return "[]"                             // JSON NOT YET IMPLEMENTED
+
+  /** Return the given catalog row formatted as a CSV string. */
+  private String toCSV (Object[] row) {
+    log.trace("(InformationOutputter.toCSV): row=${row}")
+    return ''                               // CSV NOT YET IMPLEMENTED
+  }
+
+  /** Return the given catalog row formatted as a JSON string. */
+  private String toJSON (Object[] row) {
+    log.trace("(InformationOutputter.toJSON): row=${row}")
+    return '[]'                             // JSON NOT YET IMPLEMENTED
   }
 
   /** Return the given catalog row formatted as an SQL string. */
@@ -252,12 +275,6 @@ class InformationOutputter implements IInformationOutputter {
     }
     buf.append("${isPublicValue});")        // add the is_public flag last
     return buf.toString()
-  }
-
-  /** Return the given catalog row formatted as a JSON string. */
-  private String toJSON (Object[] row) {
-    log.trace("(InformationOutputter.toJSON): row=${row}")
-    return "[]"                             // JSON NOT YET IMPLEMENTED
   }
 }
 
