@@ -1,6 +1,7 @@
 package edu.arizona.astrolabe.ffp
 
 import java.io.*
+import java.sql.SQLException
 import java.text.SimpleDateFormat
 import org.apache.logging.log4j.*
 
@@ -10,7 +11,7 @@ import groovy.sql.Sql
  * Class to implement general output methods for the Astrolabe FITS File Processor project.
  *
  *   Written by: Tom Hicks. 8/5/2019.
- *   Last Modified: Begin to implement DB storage.
+ *   Last Modified: Implement store of fields information directly into database.
  */
 class InformationOutputter implements IInformationOutputter {
   static final Logger log = LogManager.getLogger(InformationOutputter.class.getName());
@@ -18,7 +19,6 @@ class InformationOutputter implements IInformationOutputter {
   /** String which defines a comment line in the SQL output. */
   private static final String SQL_COMMENT = '--'
 
-  // TODO: LATER read DB parameters from somewhere:
   private final String imageTableName = 'sia.jwst'
   private final String catalogTableName = 'sia.jcat'
   private final String isPublicValue = '0'  // 0 means is_public = false
@@ -61,30 +61,17 @@ class InformationOutputter implements IInformationOutputter {
     }
   }
 
-
-  /**
-   * Read the database properties file and return a groovy.sql.Sql facade class.
-   * Returns null if any problems are encountered.
-   */
-  private Sql initializeDatabase (configuration) {
-    def dbProps = configuration.dbProperties
-    if (dbProps) {
-      return Sql.newInstance(dbProps.url, dbProps.user, dbProps.password, dbProps.driverClassName)
-    }
-    else
-      throw new IllegalArgumentException(
-      "(InformationOutputter.initializeDatabase): Configuration is missing database properties")
-  }
-
-
-  /** Load the given field information directly into a database. */
-  public void storeImageInfo (FieldsInfo fieldsInfo) {
-    // TODO: IMPLEMENT LATER
+  /** Do any cleanup/shutdown tasks necessary for this instance. */
+  public void cleanup () {
+    log.trace("(InformationOutputter.cleanup)")
+    if (SQL != null)
+      SQL.close()
   }
 
 
   /** Output the given field information using the current output settings. */
   public void outputImageInfo (FieldsInfo fieldsInfo) {
+    log.trace("(InformationOutputter.outputImageInfo): fieldsInfo=${fieldsInfo}")
     if (outputFormat == 'db')               // if writing to database
       storeImageInfo(fieldsInfo)
     else if (outputFormat == 'sql') {
@@ -99,6 +86,7 @@ class InformationOutputter implements IInformationOutputter {
 
   /** Begin the output of the catalog information using the current output settings. */
   public void outputCatalogHeader (File aFile) {
+    log.trace("(InformationOutputter.outputCatalogHeader): aFile=${aFile}")
     if (outputFormat == 'sql') {
       outputFile.append('begin;\n')
       outputFile.append(makeFileInfo(aFile))
@@ -119,6 +107,7 @@ class InformationOutputter implements IInformationOutputter {
 
   /** End the output of the catalog information using the current output settings. */
   public void outputCatalogFooter () {
+    log.trace("(InformationOutputter.outputCatalogFooter)")
     if (outputFormat == 'sql') {
       outputFile.append('commit;\n')
     }
@@ -127,24 +116,60 @@ class InformationOutputter implements IInformationOutputter {
 
 
   /**
+   * Load the given field information directly into a database.
+   * Could throw AbortFileProcessingException on SQLException.
+   */
+  public void storeImageInfo (FieldsInfo fieldsInfo) {
+    log.trace("(InformationOutputter.storeImageInfo): fieldsInfo=${fieldsInfo}")
+    try {
+      SQL.withTransaction {
+        SQL.execute(makeDataLine(fieldsInfo))
+      }
+    }
+    catch (SQLException sqlx) {
+      throw new AbortFileProcessingException(
+        "(InformationOutputter.storeImageInfo): SQLException: ${sqlx.message}", sqlx)
+    }
+  }
+
+
+  /**
    * Return a unique output filepath, within the specified directory, for the result file.
    */
   private String genOutputFilePath (String outputDir) {
+    log.trace("(InformationOutputter.genOutputFilePath): outputDir=${outputDir}")
     def sdf = new SimpleDateFormat("yyyyMMdd_HHmmss-SSS")
     def now = sdf.format(new Date())
     return "${outputDir}/ffp-${now}.${outputFormat}"
   }
 
 
+  /**
+   * Read the database properties file and return a groovy.sql.Sql facade class.
+   * Returns null if any problems are encountered.
+   */
+  private Sql initializeDatabase (configuration) {
+    log.trace("(InformationOutputter.initializeDatabase): configuration=${configuration}")
+    def dbProps = configuration.dbProperties
+    if (dbProps) {
+      if (DEBUG)
+        log.info("(InformationOutputter.initializeDatabase): dbProps=${dbProps}")
+      return Sql.newInstance(dbProps.url, dbProps.user, dbProps.password, dbProps.driverClassName)
+    }
+    else
+      throw new IllegalArgumentException(
+      "(InformationOutputter.initializeDatabase): Configuration is missing database properties")
+  }
+
+
   /** Return a string which formats the given field information. */
   private String makeDataLine (FieldsInfo fieldsInfo) {
     log.trace("(InformationOutputter.makeDataLine): fieldsInfo=${fieldsInfo}")
-    if (outputFormat == 'sql') {
-      return toSQL(fieldsInfo)
-    }
-    else if (outputFormat == 'json') {
+    if (outputFormat == 'json') {
       return toJSON(fieldsInfo)
     }
+    else
+      return toSQL(fieldsInfo)
   }
 
 
@@ -235,18 +260,21 @@ interface IInformationOutputter {
   /** The special keyword for input file information in the field information map. */
   static final String FILE_INFO_KEYWORD = '_FILE_INFO_'
 
+  /** Cleanup and close down this instance. */
+  public void cleanup ()
+
   /** Load the given field information directly into a database. */
-  public void storeImageInfo (FieldsInfo fieldsInfo);
+  public void storeImageInfo (FieldsInfo fieldsInfo)
 
   /** Output the given field information using the current output settings. */
-  public void outputImageInfo (FieldsInfo fieldsInfo);
+  public void outputImageInfo (FieldsInfo fieldsInfo)
 
   /** End the output of the catalog information using the current output settings. */
-  public void outputCatalogFooter ();
+  public void outputCatalogFooter ()
 
   /** Begin the output of the catalog information using the current output settings. */
-  public void outputCatalogHeader (File aFile);
+  public void outputCatalogHeader (File aFile)
 
   /** Output the given catalog row using the current output settings. */
-  public void outputCatalogRow (Object[] row);
+  public void outputCatalogRow (Object[] row)
 }
