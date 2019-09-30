@@ -11,7 +11,7 @@ import groovy.sql.Sql
  * Class to implement general output methods for the Astrolabe FITS File Processor project.
  *
  *   Written by: Tom Hicks. 8/5/2019.
- *   Last Modified: Implement store of fields information directly into database.
+ *   Last Modified: Implement store of catalog information directly into database.
  */
 class InformationOutputter implements IInformationOutputter {
   static final Logger log = LogManager.getLogger(InformationOutputter.class.getName());
@@ -92,6 +92,9 @@ class InformationOutputter implements IInformationOutputter {
       outputFile.append(makeFileInfo(aFile))
       outputFile.append('\n')
     }
+    else if (outputFormat == 'db') {
+      SQL.execute('begin;')
+    }
     // TODO: handle JSON
   }
 
@@ -102,6 +105,9 @@ class InformationOutputter implements IInformationOutputter {
       outputFile.append(toSQL(row))
       outputFile.append('\n')
     }
+    else if (outputFormat == 'db') {
+      SQL.execute(toSQL(row))
+    }
     // TODO: handle JSON
   }
 
@@ -110,6 +116,9 @@ class InformationOutputter implements IInformationOutputter {
     log.trace("(InformationOutputter.outputCatalogFooter)")
     if (outputFormat == 'sql') {
       outputFile.append('commit;\n')
+    }
+    else if (outputFormat == 'db') {
+      SQL.execute('commit;')
     }
     // TODO: handle JSON
   }
