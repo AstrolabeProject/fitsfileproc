@@ -13,7 +13,7 @@ import groovy.transform.InheritConstructors
  *   This class parses and validates its arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Update argument processing for DB storage option.
+ *   Last Modified: Add post-processing cleanup task to processor interface.
  */
 class FitsFileProcessor {
 
@@ -142,6 +142,9 @@ class FitsFileProcessor {
       else {  /** should not happen so ignore the invalid path */ }
     }
 
+    // do any necessary post-processing cleanup tasks
+    processor.cleanup()
+
     if (VERBOSE)
       log.info("(FitsFileProcessor.main): Processed ${procCount} FITS files.")
   }
@@ -235,8 +238,11 @@ class FitsFileProcessor {
  * Interface specifying behavior for classes which process FITS files for Astrolabe.
  */
 interface IFitsFileProcessor {
+  /** Do any cleanup/shutdown tasks necessary for the processor instance. */
+  public void cleanup ()
+
   /** Process the single given file. */
-  int processAFile (File aFile);
+  public int processAFile (File aFile);
 }
 
 

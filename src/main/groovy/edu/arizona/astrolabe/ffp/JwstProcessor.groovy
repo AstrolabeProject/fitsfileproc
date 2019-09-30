@@ -13,7 +13,7 @@ import uk.ac.starlink.util.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Update for DB storage option.
+ *   Last Modified: Implement post-processing cleanup task.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -87,14 +87,15 @@ class JwstProcessor implements IFitsFileProcessor {
     DEBUG = configuration.DEBUG ?: false
     VERBOSE = configuration.VERBOSE ?: false
 
-    // load the FITS field name aliases from a given file path or a default resource path.
+    // load the FITS field name aliases from a given file path or a default resource path
     fitsAliases = loadAliases(config.aliasFile)
     if (log.isDebugEnabled())               // only with log4j debug
       fitsAliases.each { entry -> log.debug("${entry.key}=${entry.value}") }
 
+    // load the database properties from a given file path or a default resource path
     def dbProperties = loadDatabaseProperties(configuration.dbConfigFile)
-    if (log.isDebugEnabled())
-      log.debug("DbProperties: ${dbProperties}")
+    if (DEBUG)
+      log.info("DB Properties: ${dbProperties}")
 
     // add some processor-specific settings to the configuration file
     config << [ 'fieldInfoColumnNames': ['obsCoreKey', 'datatype', 'required', 'default'] ]
@@ -114,6 +115,13 @@ class JwstProcessor implements IFitsFileProcessor {
     // instantiate a factory to load field information
     fieldsInfoFactory = new FieldsInfoFactory(config)
   }
+
+
+  /** Do any cleanup/shutdown tasks necessary for this instance. */
+  public void cleanup () {
+    infoOutputter.cleanup()                 // cleanup child information outputter instance
+  }
+
 
 
   /** Process the single given file. */
@@ -626,6 +634,7 @@ class JwstProcessor implements IFitsFileProcessor {
 
   /** Return database properties read from a specified file or default resource. */
   private Properties loadDatabaseProperties (File dbConfigFile=null) {
+    log.trace("(JwstProcessor.loadDatabaseProperties): dbConfigFile=${dbConfigFile}")
     def dbProperties = new Properties()
     def configStream
     def configFilepath = DEFAULT_DBCONFIG_FILEPATH
@@ -636,6 +645,9 @@ class JwstProcessor implements IFitsFileProcessor {
     }
     else                                    // else fallback to default resource file
       configStream = this.getClass().getResourceAsStream(configFilepath);
+
+    if (DEBUG)
+      log.info("(JwstProcessor.loadDatabaseProperties): Reading DB properties from: ${configFilepath}")
 
     dbProperties.load(configStream)
     configStream.close()
