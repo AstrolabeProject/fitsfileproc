@@ -42,7 +42,7 @@ run-mnt-sc:
 	docker run -it --rm --name ${NAME} -v ${PWD}/images:/images -v ${PWD}/out:/out ${IMG} --verbose -sc -of sql -o /out /images
 
 run-db:
-	docker run -it --rm --network ${NET} --name ${NAME} -v ${PWD}/images:/images ${IMG} --verbose -of db /images
+	docker run -it --rm --network ${NET} --name ${NAME} -v ${PWD}/images:/images ${IMG} --verbose /images
 
 run-db-q:
 	@docker run -d --rm --network ${NET} --name ${NAME} -v ${PWD}/images:/images ${IMG} /images

@@ -10,7 +10,7 @@ import nom.tam.fits.*
  *   This class implements a facade for a single FITS file.
  *
  *   Written by: Tom Hicks. 9/3/2019.
- *   Last Modified: Initial split from fits utils class.
+ *   Last Modified: Implement better catalog file identification.
  */
 class FitsFile {
   static final Logger log = LogManager.getLogger(FitsFile.class.getName());
@@ -71,8 +71,9 @@ class FitsFile {
   /** Tell whether the current FITS file is a FITS catalog or not. */
   public boolean isCatalogFile () {
     log.trace("(FitsFile.isCatalogFile)")
-    // TODO: IMPLEMENT THIS METHOD FOR REAL
-    return theFile.getName().startsWith('JADE') // TODO: FIX THIS LATER, just for testing now
+    // the catalog is never in the first HDU and HDU must be of type BINTABLE
+    return ((theFitsFile.getNumberOfHDUs() > 1) &&
+            (theFitsFile.getHDU(1).getHeader().getStringValue('XTENSION') == 'BINTABLE'))
   }
 
   /**
