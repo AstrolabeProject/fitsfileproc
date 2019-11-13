@@ -3,6 +3,7 @@ build.gradle
 Dockerfile
 docker-compose.yml
 data
+images
 Makefile
 out
 SAVE
