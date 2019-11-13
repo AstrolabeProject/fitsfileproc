@@ -13,7 +13,7 @@ import uk.ac.starlink.util.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Implement post-processing cleanup task.
+ *   Last Modified: Add check for valid EXTEND header in image file.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -212,6 +212,11 @@ class JwstProcessor implements IFitsFileProcessor {
       log.debug("(JwstProcessor.processAnImageFile): Read ${headerFields.size()} FITS metadata fields:")
       headerFields.each { entry -> log.debug("${entry.key}=${entry.value}") }
     }
+
+    // special case: check for invalid EXTEND value
+    def extend = headerFields.get('EXTEND', null)
+    if (!extend || extend != 'T')           // EXTEND required for image and must be 'T'
+      return 0                              // else skip this file
 
     // Data structure defining information for fields processed by this processor.
     // Loads the field information from a given file or a default resource path.
