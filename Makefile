@@ -1,4 +1,4 @@
-IMG=ffp
+IMG=ffp:devel
 BUILDJAR = build/libs/fitsfileprocessor.jar
 GSRC = src/main/groovy/edu/arizona/astrolabe/ffp/*.groovy
 NAME=ffp
