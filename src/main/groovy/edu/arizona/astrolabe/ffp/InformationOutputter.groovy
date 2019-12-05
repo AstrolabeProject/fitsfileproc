@@ -11,7 +11,7 @@ import groovy.sql.Sql
  * Class to implement general output methods for the Astrolabe FITS File Processor project.
  *
  *   Written by: Tom Hicks. 8/5/2019.
- *   Last Modified: Make DB the default output format. Prepare for CSV.
+ *   Last Modified: Update for rename of the Jaguar Catalog table.
  */
 class InformationOutputter implements IInformationOutputter {
   static final Logger log = LogManager.getLogger(InformationOutputter.class.getName());
@@ -20,7 +20,7 @@ class InformationOutputter implements IInformationOutputter {
   private static final String SQL_COMMENT = '--'
 
   private final String imageTableName = 'sia.jwst'
-  private final String catalogTableName = 'sia.jcat'
+  private final String catalogTableName = 'sia.jaguar'
   private final String isPublicValue = '0'  // 0 means is_public = false
 
   /** Debug setting: when true, show internal information for debugging. */

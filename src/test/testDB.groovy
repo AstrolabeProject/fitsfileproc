@@ -24,8 +24,8 @@ def SQL = Sql.newInstance(url, readUser, password, driverClassName)
 
 def jwst = SQL.firstRow("select count(*) from sia.jwst").count
 println("count(jwst) = ${jwst}")
-def jcat = SQL.firstRow("select count(*) from sia.jcat").count
-println("count(jcat) = ${jcat}")
+def jaguar = SQL.firstRow("select count(*) from sia.jaguar").count
+println("count(jaguar) = ${jaguar}")
 
 SQL.close()
 
