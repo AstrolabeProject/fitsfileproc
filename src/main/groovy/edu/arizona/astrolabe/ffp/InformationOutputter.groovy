@@ -11,7 +11,7 @@ import groovy.sql.Sql
  * Class to implement general output methods for the Astrolabe FITS File Processor project.
  *
  *   Written by: Tom Hicks. 8/5/2019.
- *   Last Modified: Update for rename of the Jaguar Catalog table.
+ *   Last Modified: Remove catalog processing.
  */
 class InformationOutputter implements IInformationOutputter {
   static final Logger log = LogManager.getLogger(InformationOutputter.class.getName());
@@ -20,7 +20,6 @@ class InformationOutputter implements IInformationOutputter {
   private static final String SQL_COMMENT = '--'
 
   private final String imageTableName = 'sia.jwst'
-  private final String catalogTableName = 'sia.jaguar'
   private final String isPublicValue = '0'  // 0 means is_public = false
 
   /** Debug setting: when true, show internal information for debugging. */
@@ -80,46 +79,6 @@ class InformationOutputter implements IInformationOutputter {
       outputFile.append('\n')
       outputFile.append(makeDataLine(fieldsInfo))
       outputFile.append('\n')
-    }
-    // TODO: handle JSON and CSV
-  }
-
-
-  /** Begin the output of the catalog information using the current output settings. */
-  public void outputCatalogHeader (File aFile) {
-    log.trace("(InformationOutputter.outputCatalogHeader): aFile=${aFile}")
-    if (outputFormat == 'db') {
-      SQL.execute('begin;')
-    }
-    else if (outputFormat == 'sql') {
-      outputFile.append('begin;\n')
-      outputFile.append(makeFileInfo(aFile))
-      outputFile.append('\n')
-    }
-    // TODO: handle JSON and CSV
-  }
-
-  /** Output the given catalog row using the current output settings. */
-  public void outputCatalogRow (Object[] row) {
-    log.trace("(InformationOutputter.outputCatalogRow): row=${row}")
-    if (outputFormat == 'db') {
-      SQL.execute(toSQL(row))
-    }
-    else if (outputFormat == 'sql') {
-      outputFile.append(toSQL(row))
-      outputFile.append('\n')
-    }
-    // TODO: handle JSON and CSV
-  }
-
-  /** End the output of the catalog information using the current output settings. */
-  public void outputCatalogFooter () {
-    log.trace("(InformationOutputter.outputCatalogFooter)")
-    if (outputFormat == 'db') {
-      SQL.execute('commit;')
-    }
-    else if (outputFormat == 'sql') {
-      outputFile.append('commit;\n')
     }
     // TODO: handle JSON and CSV
   }
@@ -251,31 +210,6 @@ class InformationOutputter implements IInformationOutputter {
     return "insert into ${imageTableName} (${keys}) values (${values});"
   }
 
-
-  /** Return the given catalog row formatted as a CSV string. */
-  private String toCSV (Object[] row) {
-    log.trace("(InformationOutputter.toCSV): row=${row}")
-    return ''                               // CSV NOT YET IMPLEMENTED
-  }
-
-  /** Return the given catalog row formatted as a JSON string. */
-  private String toJSON (Object[] row) {
-    log.trace("(InformationOutputter.toJSON): row=${row}")
-    return '[]'                             // JSON NOT YET IMPLEMENTED
-  }
-
-  /** Return the given catalog row formatted as an SQL string. */
-  private String toSQL (Object[] row) {
-    log.trace("(InformationOutputter.toSQL): row=${row}")
-    StringBuffer buf = new StringBuffer()
-    buf.append("insert into ${catalogTableName} values (")
-    row.each { col ->
-      buf.append(col)
-      buf.append(',')
-    }
-    buf.append("${isPublicValue});")        // add the is_public flag last
-    return buf.toString()
-  }
 }
 
 
@@ -294,13 +228,4 @@ interface IInformationOutputter {
 
   /** Output the given field information using the current output settings. */
   public void outputImageInfo (FieldsInfo fieldsInfo)
-
-  /** End the output of the catalog information using the current output settings. */
-  public void outputCatalogFooter ()
-
-  /** Begin the output of the catalog information using the current output settings. */
-  public void outputCatalogHeader (File aFile)
-
-  /** Output the given catalog row using the current output settings. */
-  public void outputCatalogRow (Object[] row)
 }

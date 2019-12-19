@@ -13,7 +13,7 @@ import groovy.transform.InheritConstructors
  *   This class parses and validates its arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Make DB the default output format. Prepare for CSV.
+ *   Last Modified: Remove catalog processing.
  */
 class FitsFileProcessor {
 
@@ -44,8 +44,6 @@ class FitsFileProcessor {
         'Writeable directory in which to write any generated output file [no default]')
       of(longOpt: 'output-format',  args:1, argName: 'format',
          'Output format for processing results: "db", "csv", "json", or "sql" [default: "db"]')
-      sc(longOpt: 'skip-catalogs', 'Skip catalog processing [default: false]')
-      si(longOpt: 'skip-images',   'Skip image processing [default: false]')
       p(longOpt: 'processor',    args:1, argName: 'processor-type',
         'Name of processor to use [default: "jwst"]')
       v(longOpt: 'verbose',
@@ -93,9 +91,7 @@ class FitsFileProcessor {
 
     // instantiate a specialized processor with the specified settings
     def settings = [ 'DEBUG': DEBUG, 'VERBOSE': VERBOSE,
-                     'outputFormat': outputFormat,
-                     'skipCatalogs': options.sc ?: false,
-                     'skipImages': options.si ?: false ]
+                     'outputFormat': outputFormat ]
     if (aliasFile)
       settings << [ 'aliasFile': aliasFile ]
     if (dbConfigFile)

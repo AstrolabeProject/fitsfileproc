@@ -4,16 +4,12 @@ import java.io.*
 import java.util.zip.GZIPInputStream
 import org.apache.logging.log4j.*
 
-import uk.ac.starlink.fits.*
-import uk.ac.starlink.table.*
-import uk.ac.starlink.util.*
-
 /**
  * Astrolabe JWST-specific FITS file processor class.
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Add check for valid EXTEND header in image file.
+ *   Last Modified: Remove catalog processing.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -143,56 +139,12 @@ class JwstProcessor implements IFitsFileProcessor {
 
     // figure out what type of FITS file this is and process it accordingly
     if (fitsFile.isCatalogFile()) {
-      if (config.skipCatalogs) {
-        if (VERBOSE)
-          log.info("(JwstProcessor.processAFile): Skipping FITS catalog '${aFile.getAbsolutePath()}'")
-        return 0
-      }
-      else
-        return processACatalogFile(aFile, fitsFile)
-    }
-    else {
-      if (config.skipImages) {
-        if (VERBOSE)
-          log.info("(JwstProcessor.processAFile): Skipping FITS image '${aFile.getAbsolutePath()}'")
-        return 0
-      }
-      else
-        return processAnImageFile(aFile, fitsFile)
-    }
-  }
-
-
-  /** Process the given FITS catalog file. */
-  private int processACatalogFile (File aFile, FitsFile fitsFile) {
-    log.trace("(JwstProcessor.processACatalogFile): aFile=${aFile}, fitsFile=${fitsFile}")
-
-    if (VERBOSE)
-      log.info("(JwstProcessor.processACatalogFile): Processing FITS catalog '${aFile.getAbsolutePath()}'")
-
-    def ftb = new FitsTableBuilder()
-    def tbl = ftb.makeStarTable(new FileDataSource(aFile), false, StoragePolicy.getDefaultPolicy())
-    if (tbl != null) {
       if (VERBOSE)
-        log.info("(JwstProcessor.processACatalogFile): rows=${tbl.getRowCount()} cols=${tbl.getColumnCount()}")
-
-      infoOutputter.outputCatalogHeader(aFile) // begin the output of the catalog info
-
-      // output the individual rows in sequence to reduce memory usage
-      def rowSeq = tbl.getRowSequence()     // get the iterator of table rows
-      def cnt = 0
-      while (rowSeq.next()) {               // while rows remain, output them
-        infoOutputter.outputCatalogRow(rowSeq.getRow())
-        cnt += 1
-      }
-
-      infoOutputter.outputCatalogFooter() // end the output of the catalog info
-
-      if (VERBOSE)
-        log.info("(JwstProcessor.processACatalogFile): Processed ${cnt} rows")
+        log.info("(JwstProcessor.processAFile): Skipping FITS catalog '${aFile.getAbsolutePath()}'")
+      return 0
     }
-
-    return 1                                // successfully processed one more file
+    else
+      return processAnImageFile(aFile, fitsFile)
   }
 
 
