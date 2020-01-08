@@ -28,7 +28,7 @@ class FitsFileProcessor {
   public static void main (String[] args) {
 
     // read, parse, and validate command line arguments
-    def usage = 'java -jar ffp.jar [-h] [-f output-format] [-o output-dir] (FITS-file|FITS-directory)..'
+    def usage = 'java -jar ffp.jar [-h] [-of output-format] [-o output-dir] (FITS-file|FITS-directory)..'
     def cli = new CliBuilder(usage: usage)
     cli.width = 100                         // increase usage message width
     cli.with {
