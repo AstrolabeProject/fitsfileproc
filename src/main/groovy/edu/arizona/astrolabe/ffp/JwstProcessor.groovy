@@ -9,7 +9,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Remove catalog processing.
+ *   Last Modified: Remove EXTEND field check. Add some more error logging.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -79,6 +79,9 @@ class JwstProcessor implements IFitsFileProcessor {
   /** Public constructor taking a map of configuration settings. */
   public JwstProcessor (configuration) {
     log.trace("(JwstProcessor.ctor): config=${configuration}")
+    if (DEBUG)
+      log.info("(JwstProcessor.ctor): config=${configuration}")
+
     config = configuration                  // save incoming settings in global variable
     DEBUG = configuration.DEBUG ?: false
     VERBOSE = configuration.VERBOSE ?: false
@@ -157,18 +160,16 @@ class JwstProcessor implements IFitsFileProcessor {
 
     // make a map of all FITS headers and value strings
     Map headerFields = fitsFile.getHeaderFields() // defaults to first HDU
-    if (headerFields == null)               // if unable to read the FITS file headers
+    if (headerFields == null) {             // if unable to read the FITS file headers
+      def msg = "Unable to read FITS file '${aFile.getAbsolutePath()}' headers. File skipped."
+      Utils.logError('JwstProcessor.processAnImageFile', msg)
       return 0                              // then skip this file
+    }
 
     if (log.isDebugEnabled()) {             // only with log4j debug
       log.debug("(JwstProcessor.processAnImageFile): Read ${headerFields.size()} FITS metadata fields:")
       headerFields.each { entry -> log.debug("${entry.key}=${entry.value}") }
     }
-
-    // special case: check for invalid EXTEND value
-    def extend = headerFields.get('EXTEND', null)
-    if (!extend || extend != 'T')           // EXTEND required for image and must be 'T'
-      return 0                              // else skip this file
 
     // Data structure defining information for fields processed by this processor.
     // Loads the field information from a given file or a default resource path.
