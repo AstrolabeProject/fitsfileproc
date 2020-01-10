@@ -1,5 +1,6 @@
 IMG=ffp:devel
 BUILDJAR = build/libs/fitsfileprocessor.jar
+COLLECTION=JWST
 GSRC = src/main/groovy/edu/arizona/astrolabe/ffp/*.groovy
 IMGS=${PWD}/images
 NAME=ffp
@@ -56,16 +57,16 @@ run-bash:
 	docker run -it --rm --network ${NET} --name ${NAME} -v ${IMGS}:/images -v ${OUTDIR}:/out --entrypoint /bin/bash ${IMG}
 
 run-db:
-	docker run -it --rm --network ${NET} --name ${NAME} -v ${IMGS}:/images ${IMG} --verbose /images
+	docker run -it --rm --network ${NET} --name ${NAME} -v ${IMGS}:/images ${IMG} --verbose -c ${COLLECTION} /images
 
 run-db-q:
-	@docker run -d --rm --network ${NET} --name ${NAME} -v ${IMGS}:/images ${IMG} /images
+	@docker run -d --rm --network ${NET} --name ${NAME} -v ${IMGS}:/images ${IMG} -c ${COLLECTION} /images
 
 run-mnt:
-	docker run -it --rm --name ${NAME} -v ${IMGS}:/images -v ${OUTDIR}:/out ${IMG} --verbose -of sql -o /out /images
+	docker run -it --rm --name ${NAME} -v ${IMGS}:/images -v ${OUTDIR}:/out ${IMG} --verbose -c ${COLLECTION} -of sql -o /out /images
 
 run-mnt-sc:
-	docker run -it --rm --name ${NAME} -v ${IMGS}:/images -v ${OUTDIR}:/out ${IMG} --verbose --skip-catalogs -of sql -o /out /images
+	docker run -it --rm --name ${NAME} -v ${IMGS}:/images -v ${OUTDIR}:/out ${IMG} --verbose --skip-catalogs -c ${COLLECTION} -of sql -o /out /images
 
 testjar-db: macjar
 	java -jar ${BUILDJAR} --verbose -db ${PWD}/src/test/resources/db.properties images
