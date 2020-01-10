@@ -13,7 +13,7 @@ import groovy.transform.InheritConstructors
  *   This class parses and validates its arguments, then calls core processing methods.
  *
  *   Written by: Tom Hicks. 7/14/2019.
- *   Last Modified: Remove catalog processing.
+ *   Last Modified: Add collection name argument.
  */
 class FitsFileProcessor {
 
@@ -28,12 +28,14 @@ class FitsFileProcessor {
   public static void main (String[] args) {
 
     // read, parse, and validate command line arguments
-    def usage = 'java -jar ffp.jar [-h] [-of output-format] [-o output-dir] (FITS-file|FITS-directory)..'
+    def usage = 'java -jar ffp.jar [-h] [-c collection-name] [-of output-format] [-o output-dir] (FITS-file|FITS-directory)..'
     def cli = new CliBuilder(usage: usage)
     cli.width = 100                         // increase usage message width
     cli.with {
       a(longOpt: 'aliases', args:1, argName: 'filepath',
         'File of aliases (FITS keyword to ObsCore keyword mappings) [default: "jwst-aliases"]')
+      c(longOpt: 'collection', args:1, argName: 'collection',
+        'Collection name for ingested images [no default]')
       d(longOpt: 'debug', 'Print debugging output during processing [default: non-debug mode]')
       db(longOpt: 'dbconfig', args:1, argName: 'filepath',
         'Database configuration properties file [default: "jwst-dbconfig"]')
@@ -94,6 +96,9 @@ class FitsFileProcessor {
                      'outputFormat': outputFormat ]
     if (aliasFile)
       settings << [ 'aliasFile': aliasFile ]
+    def collection = options.c ?: null
+    if (collection)
+      settings << [ 'collection': collection ]
     if (dbConfigFile)
       settings << [ 'dbConfigFile': dbConfigFile ]
     if (fieldsFile)
@@ -158,7 +163,7 @@ class FitsFileProcessor {
     log.trace("(FitsFileProcessor.listFitsFilesInDir): dir=${dir}")
     return dir.listFiles( new FilenameFilter() {
       boolean accept (java.io.File not_used, java.lang.String filename) {
-        return isAcceptableFilename(filename)   // ** directory argument ignored **
+        return isAcceptableFilename(filename)   // ** directory argument of accept is ignored **
       }
     } )
   }

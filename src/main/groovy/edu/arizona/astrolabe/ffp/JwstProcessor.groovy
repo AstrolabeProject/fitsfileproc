@@ -9,7 +9,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Remove EXTEND field check. Add some more error logging.
+ *   Last Modified: Use collection name argument, if given.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -465,6 +465,11 @@ class JwstProcessor implements IFitsFileProcessor {
       fieldsInfo.setValueFor('t_exptime', 1347.0 as Double)
     ////////////////////////////////////////////////////////////////////////////////
 
+    // special case: If given a collection name argument, then use it
+    if (config.collection)
+      fieldsInfo.setValueFor('obs_collection', config.collection)
+
+    // general case: compute values for fields which do not already have a value
     fieldsInfo.each { key, fieldInfo ->
       if (!fieldInfo.hasValue()) {          // do not replace existing values
         computeValueForAField(fieldInfo, headerFields, fieldsInfo)
