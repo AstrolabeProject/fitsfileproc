@@ -61,12 +61,15 @@ DATE-BEG, t_min
 # for JWST, DATE-OBS is date only, no time
 # DATE-OBS, t_min
 # DATE-END, t_max
+EXPSTART, t_min
 MJD     , t_min
 MJD-OBS , t_min
 TSTART  , t_min
+EXPEND  , t_max
 MJD-END , t_max
 TSTOP   , t_max
 EXPTIME , t_exptime
+DURATION, t_exptime
 _NOP_   , t_resolution
 
 # Observable Axis (section B.6.4)
