@@ -12,7 +12,7 @@ import ca.nrc.cadc.wcs.Transform.Result
  *   This class implements static, shared, utility methods for FITS file processing.
  *
  *   Written by: Tom Hicks. 8/28/2019.
- *   Last Modified: Split out FITS file dependent methods into separate fits file class.
+ *   Last Modified: Fix: fetch PCi_j matrix from header keywords.
  */
 class FitsUtils {
   static final Logger log = LogManager.getLogger(FitsUtils.class.getName());
@@ -162,14 +162,19 @@ class FitsUtils {
     keywords.put('CD2_1',   headerFields['CD2_1'] as Double)
     keywords.put('CD2_2',   headerFields['CD2_2'] as Double)
 
+    keywords.put('PC1_1',   headerFields['PC1_1'] as Double)
+    keywords.put('PC1_2',   headerFields['PC1_2'] as Double)
+    keywords.put('PC2_1',   headerFields['PC2_1'] as Double)
+    keywords.put('PC2_2',   headerFields['PC2_2'] as Double)
+
     keywords.put('CRPIX1',  headerFields['CRPIX1'] as Double)
     keywords.put('CRPIX2',  headerFields['CRPIX2'] as Double)
 
     keywords.put('CRVAL1',  headerFields['CRVAL1'] as Double)
     keywords.put('CRVAL2',  headerFields['CRVAL2'] as Double)
 
-    keywords.put('CDELTA1', headerFields['CRVAL1'] as Double)
-    keywords.put('CDELTA2', headerFields['CRVAL2'] as Double)
+    keywords.put('CDELT1',  headerFields['CDELT1'] as Double)
+    keywords.put('CDELT2',  headerFields['CDELT2'] as Double)
 
     keywords.put('CTYPE1',  headerFields['CTYPE1'])
     keywords.put('CTYPE2',  headerFields['CTYPE2'])
