@@ -9,7 +9,7 @@ import org.apache.logging.log4j.*
  *   This class implements JWST-specific FITS file processing methods.
  *
  *   Written by: Tom Hicks. 7/28/2019.
- *   Last Modified: Use collection name argument, if given.
+ *   Last Modified: Remove debugging statements from last checkin.
  */
 class JwstProcessor implements IFitsFileProcessor {
   static final Logger log = LogManager.getLogger(JwstProcessor.class.getName());
@@ -334,27 +334,38 @@ class JwstProcessor implements IFitsFileProcessor {
 
   /**
    * Calculate the scale (arcsec/pixel) for the current image using the given
-   * FITS file header and field information.
-   *  scale = 3600.0 * sqrt((cd1_1**2 + cd2_1**2 + cd1_2**2 + cd2_2**2) / 2.0)
+   * FITS file header and field information. If scale not given by CDELT1, then
+   * it is approximated, from the CD matrix values, by this algorithm:
+   *    scale = 3600.0 * sqrt((cd1_1**2 + cd2_1**2 + cd1_2**2 + cd2_2**2) / 2.0)
    */
   private void calcScale (Map headerFields, FieldsInfo fieldsInfo) {
     log.trace("(JwstProcessor.calcScale): headerFields=${headerFields}, fieldsInfo=${fieldsInfo}")
-    def cd1_1 = headerFields['CD1_1'] as Double
-    def cd1_2 = headerFields['CD1_2'] as Double
-    def cd2_1 = headerFields['CD2_1'] as Double
-    def cd2_2 = headerFields['CD2_2'] as Double
 
-    if ( (cd1_1 != null) && (cd1_2 != null) &&  // sanity check all vars
-         (cd2_1 != null) && (cd2_2 != null) )
-    {
-      Double scale = 3600.0 * Math.sqrt( (Math.pow(cd1_1, 2.0) +
-                                          Math.pow(cd1_2, 2.0) +
-                                          Math.pow(cd2_1, 2.0) +
-                                          Math.pow(cd2_2, 2.0) / 2.0) )
-      def fieldInfo = fieldsInfo.get('im_scale')
-      if (fieldInfo)
-        fieldInfo.setValue(scale)
+    Double scale = 0
+
+    def cdelt1 = headerFields['CDELT1'] as Double
+    if (cdelt1) {
+      scale = Math.abs(cdelt1)              // assumes square pixels!
     }
+    else {                                  // approximate scale from CD matrix
+      def cd1_1 = headerFields['CD1_1'] as Double
+      def cd1_2 = headerFields['CD1_2'] as Double
+      def cd2_1 = headerFields['CD2_1'] as Double
+      def cd2_2 = headerFields['CD2_2'] as Double
+
+      if ( (cd1_1 != null) && (cd1_2 != null) &&  // sanity check all vars
+          (cd2_1 != null) && (cd2_2 != null) )
+      {
+        scale = 3600.0 * Math.sqrt( (Math.pow(cd1_1, 2.0) +
+                                     Math.pow(cd1_2, 2.0) +
+                                     Math.pow(cd2_1, 2.0) +
+                                     Math.pow(cd2_2, 2.0) / 2.0) )
+      }
+    }
+
+    def fieldInfo = fieldsInfo.get('im_scale')
+    if (fieldInfo && (scale > 0))
+      fieldInfo.setValue(scale)
   }
 
 
