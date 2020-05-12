@@ -10,7 +10,7 @@ import nom.tam.fits.*
  *   This class implements a facade for a single FITS file.
  *
  *   Written by: Tom Hicks. 9/3/2019.
- *   Last Modified: Implement better catalog file identification.
+ *   Last Modified: Handle case of reading empty (i.e., bad) FITS file.
  */
 class FitsFile {
   static final Logger log = LogManager.getLogger(FitsFile.class.getName());
@@ -43,6 +43,8 @@ class FitsFile {
 
     theFile = aFile
     theFitsFile = readFitsFile(aFile)       // actually read the FITS file
+    if (theFitsFile.getNumberOfHDUs() == 0) // reader can return FITS file from empty file!
+      throw new RuntimeException("File ${aFile} is not a valid FITS file.")
   }
 
 
